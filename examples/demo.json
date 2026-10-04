@@ -1,0 +1,8 @@
+{
+  "protocol": "distribution/0.1",
+  "product": {"id":"prod_demo","name":"Demo App","type":"application","publisher":"pub_demo"},
+  "version":"1.0.0",
+  "publishedAt":"2026-10-04T00:00:00Z",
+  "artifacts":[{"target":"macos-arm64","uri":"https://example.com/demo.dmg","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}],
+  "interfaces":[{"type":"web","uri":"https://example.com"},{"type":"agent","uri":"https://example.com/agent","capabilities":["document-conversion"]}]
+}

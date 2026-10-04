@@ -1,0 +1,1 @@
+{"name":"@distribution-protocol/protocol","version":"0.1.0","type":"module","exports":"./src/index.mjs","scripts":{"test":"node --test src/index.test.mjs"}}
