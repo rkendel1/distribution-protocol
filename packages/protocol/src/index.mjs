@@ -1,33 +1,111 @@
-import { createHash, createPublicKey, generateKeyPairSync, sign, verify } from 'node:crypto';
+/**
+ * Distribution Protocol — public surface.
+ *
+ * This package defines the protocol: identity, the canonical manifest,
+ * serialization, signing, resolution, acquisition and receipts. It contains no
+ * network code and no storage. A registry is a consumer of this package,
+ * never a part of it.
+ */
 
-export const PROTOCOL_VERSION = '0.1';
+// Errors
+export {
+  ErrorCode,
+  ProtocolError,
+  InvalidIdentifierError,
+  ManifestValidationError,
+  CanonicalizationError,
+  InvalidReleaseError,
+  SignatureError,
+  ReleaseConflictError,
+  NotFoundError,
+  ArtifactNotFoundError,
+  PublisherKeyError,
+  ResolutionError,
+  AcquisitionError,
+  DigestMismatchError,
+  ReceiptError,
+  hasCode,
+} from './errors.mjs';
 
-export function canonicalize(value) {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return '[' + value.map(canonicalize).join(',') + ']';
-  const obj = value;
-  return '{' + Object.keys(obj).sort().map(k => JSON.stringify(k)+':'+canonicalize(obj[k])).join(',') + '}';
-}
+// Identity
+export {
+  Scheme,
+  isValidNamespace,
+  isValidSlug,
+  isValidVersion,
+  normalizeIdentifier,
+  publisherId,
+  parsePublisherId,
+  isPublisherId,
+  productId,
+  parseProductId,
+  isProductId,
+  releaseId,
+  releaseIdFromProduct,
+  parseReleaseId,
+  isReleaseId,
+  parseIdentifier,
+  isIdentifier,
+  normalizeId,
+  compareVersions,
+  sortVersions,
+  maxVersion,
+  productIdOf,
+} from './identifiers.mjs';
 
-export function digest(value) {
-  return 'sha256:' + createHash('sha256').update(canonicalize(value)).digest('hex');
-}
+// Canonical serialization
+export { canonicalize, canonicalBytes } from './canonical.mjs';
 
-export function signManifest(manifest, privateKey) {
-  const signature = sign(null, Buffer.from(canonicalize(manifest)), privateKey).toString('base64url');
-  const publicKey = createPublicKey(privateKey).export({ type: 'spki', format: 'der' }).toString('base64url');
-  return { manifest, signature, algorithm: 'ed25519', publicKey };
-}
+// Content addressing
+export {
+  DigestAlgorithm,
+  SUPPORTED_DIGEST_ALGORITHMS,
+  isDigest,
+  digestOfBytes,
+  digestHex,
+  verifyBytes,
+  assertBytesMatchDigest,
+} from './artifact.mjs';
 
-export function verifyManifest(signed) {
-  const key = createPublicKey({ key: Buffer.from(signed.publicKey, 'base64url'), type: 'spki', format: 'der' });
-  return verify(null, Buffer.from(canonicalize(signed.manifest)), key, Buffer.from(signed.signature, 'base64url'));
-}
+// Manifest schema + validation
+export {
+  MANIFEST_SCHEMA,
+  PROTOCOL_ID,
+  PROTOCOL_VERSION,
+  TARGET_ANY,
+  ARTIFACT_ID_RE,
+  INTERFACE_ID_RE,
+  TOKEN_RE,
+} from './schema.mjs';
+export { validateManifest, assertValidManifest, releaseIdOf, ManifestError } from './validate.mjs';
 
-export function generatePublisherKeypair() {
-  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-  return {
-    privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
-    publicKey: publicKey.export({ type: 'spki', format: 'der' }).toString('base64url')
-  };
-}
+// Signing
+export {
+  SIGNATURE_ALGORITHM,
+  SUPPORTED_ALGORITHMS,
+  RELEASE_TYPE,
+  generatePublisherKeypair,
+  keyIdOf,
+  signRelease,
+  verifyRelease,
+  assertValidRelease,
+  assertValidReleaseShape,
+  releaseIdOfEnvelope,
+} from './signing.mjs';
+
+// Resolution
+export {
+  ResolutionFailure,
+  targetMatches,
+  interfaceSatisfies,
+  orderReleases,
+  selectArtifact,
+  selectInterface,
+  resolveFromReleases,
+} from './resolve.mjs';
+
+// Acquisition
+export { acquire, fetchers, verifyArtifactBytes } from './acquire.mjs';
+
+// Receipts
+export { RECEIPT_TYPE, createReceipt, receiptFromAcquisition, validateReceipt } from './receipt.mjs';

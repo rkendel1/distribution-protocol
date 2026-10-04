@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+*.log
+
+# Local registry data and publisher keys are never committed.
+*.pem
+*.pem.pub
+.registries/

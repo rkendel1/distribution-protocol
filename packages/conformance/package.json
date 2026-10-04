@@ -1,0 +1,25 @@
+{
+  "name": "@distribution-protocol/conformance",
+  "version": "1.0.0",
+  "description": "Executable protocol conformance suite: the definition of a conformant Distribution Protocol implementation",
+  "type": "module",
+  "main": "./src/registry-suite.mjs",
+  "exports": {
+    ".": "./src/registry-suite.mjs",
+    "./registry-suite": "./src/registry-suite.mjs"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test src/*.test.mjs"
+  },
+  "dependencies": {
+    "@distribution-protocol/protocol": "1.0.0",
+    "@distribution-protocol/registry": "1.0.0"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17"
+  }
+}

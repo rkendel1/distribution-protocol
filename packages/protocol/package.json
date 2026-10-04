@@ -1,1 +1,20 @@
-{"name":"@distribution-protocol/protocol","version":"0.1.0","type":"module","exports":"./src/index.mjs","scripts":{"test":"node --test src/index.test.mjs"}}
+{
+  "name": "@distribution-protocol/protocol",
+  "version": "1.0.0",
+  "description": "Distribution Protocol: canonical identity, manifests, signing, resolution and acquisition",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test src/*.test.mjs"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17"
+  }
+}

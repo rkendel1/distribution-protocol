@@ -1,1 +1,20 @@
-{"name":"@distribution-protocol/workspace","private":true,"version":"0.1.0","workspaces":["packages/*"]}
+{
+  "name": "@distribution-protocol/workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Distribution Protocol — publish once, verify everywhere, resolve anywhere",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "test:conformance": "node --test packages/conformance/src/*.test.mjs",
+    "test:cli": "node --test packages/cli/src/*.test.mjs",
+    "generate:spec": "node scripts/generate-spec.mjs"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17"
+  }
+}

@@ -1,1 +1,437 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://distribution.protocol/schemas/manifest-0.1.json","type":"object","required":["protocol","product","version","publishedAt"],"properties":{"protocol":{"const":"distribution/0.1"},"product":{"type":"object","required":["id","name","type","publisher"],"properties":{"id":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"type":{"enum":["application","agent","tool","game","model","service","package","plugin"]},"publisher":{"type":"string","minLength":1},"description":{"type":"string"}},"additionalProperties":false},"version":{"type":"string","minLength":1},"publishedAt":{"type":"string","format":"date-time"},"artifacts":{"type":"array","items":{"type":"object","required":["target","uri","digest"],"properties":{"target":{"type":"string"},"uri":{"type":"string","format":"uri"},"digest":{"type":"string","pattern":"^sha256:[a-f0-9]{64}$"},"size":{"type":"integer","minimum":0},"mediaType":{"type":"string"}},"additionalProperties":false}},"interfaces":{"type":"array","items":{"type":"object","required":["type","uri"],"properties":{"type":{"enum":["web","api","agent","cli","desktop","mobile","download","stream"]},"uri":{"type":"string","format":"uri"},"capabilities":{"type":"array","items":{"type":"string"}}},"additionalProperties":false}},"requirements":{"type":"object","additionalProperties":{"type":"string"}},"permissions":{"type":"array","items":{"type":"string"}},"pricing":{"type":"object","required":["model"],"properties":{"model":{"enum":["free","paid","subscription","usage"]},"currency":{"type":"string"},"amount":{"type":"number","minimum":0},"unit":{"type":"string"}},"additionalProperties":false},"metadata":{"type":"object"}},"additionalProperties":false}
+{
+  "$defs": {
+    "artifact": {
+      "additionalProperties": false,
+      "description": "A content-addressed distribution object.",
+      "properties": {
+        "digest": {
+          "description": "Content address. This is the artifact identity.",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable id unique within this release.",
+          "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$",
+          "type": "string"
+        },
+        "mediaType": {
+          "description": "IANA media type of the artifact bytes.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Byte length. Verified against acquired bytes.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "additionalProperties": false,
+          "description": "Platform and architecture an artifact is built for.",
+          "properties": {
+            "arch": {
+              "description": "CPU architecture, or \"any\".",
+              "enum": [
+                "any",
+                "arm64",
+                "x64"
+              ],
+              "type": "string"
+            },
+            "os": {
+              "description": "Operating system, or \"any\".",
+              "enum": [
+                "any",
+                "linux",
+                "macos",
+                "windows"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "os",
+            "arch"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "digest",
+        "mediaType",
+        "target"
+      ],
+      "type": "object"
+    },
+    "interface": {
+      "additionalProperties": false,
+      "description": "A way to consume the product, possibly without installing an artifact.",
+      "properties": {
+        "capabilities": {
+          "description": "Capability tokens this interface provides.",
+          "items": {
+            "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id": {
+          "description": "Stable id unique within this release.",
+          "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$",
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        },
+        "type": {
+          "description": "Interface kind.",
+          "enum": [
+            "api",
+            "cli",
+            "desktop",
+            "library",
+            "mobile",
+            "service",
+            "stream",
+            "web"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "type": "object"
+    },
+    "manifest": {
+      "additionalProperties": false,
+      "description": "Canonical Distribution Protocol manifest, version 1.",
+      "properties": {
+        "artifacts": {
+          "description": "Content-addressed binaries or blobs.",
+          "items": {
+            "additionalProperties": false,
+            "description": "A content-addressed distribution object.",
+            "properties": {
+              "digest": {
+                "description": "Content address. This is the artifact identity.",
+                "pattern": "^sha256:[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "id": {
+                "description": "Stable id unique within this release.",
+                "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$",
+                "type": "string"
+              },
+              "mediaType": {
+                "description": "IANA media type of the artifact bytes.",
+                "type": "string"
+              },
+              "size": {
+                "description": "Byte length. Verified against acquired bytes.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "target": {
+                "additionalProperties": false,
+                "description": "Platform and architecture an artifact is built for.",
+                "properties": {
+                  "arch": {
+                    "description": "CPU architecture, or \"any\".",
+                    "enum": [
+                      "any",
+                      "arm64",
+                      "x64"
+                    ],
+                    "type": "string"
+                  },
+                  "os": {
+                    "description": "Operating system, or \"any\".",
+                    "enum": [
+                      "any",
+                      "linux",
+                      "macos",
+                      "windows"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "os",
+                  "arch"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "digest",
+              "mediaType",
+              "target"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "interfaces": {
+          "description": "Ways to consume the product.",
+          "items": {
+            "additionalProperties": false,
+            "description": "A way to consume the product, possibly without installing an artifact.",
+            "properties": {
+              "capabilities": {
+                "description": "Capability tokens this interface provides.",
+                "items": {
+                  "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "id": {
+                "description": "Stable id unique within this release.",
+                "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$",
+                "type": "string"
+              },
+              "mediaType": {
+                "type": "string"
+              },
+              "type": {
+                "description": "Interface kind.",
+                "enum": [
+                  "api",
+                  "cli",
+                  "desktop",
+                  "library",
+                  "mobile",
+                  "service",
+                  "stream",
+                  "web"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "permissions": {
+          "description": "Protocol permission tokens requested by the product.",
+          "items": {
+            "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "product": {
+          "additionalProperties": false,
+          "description": "Registry-independent product identity for this release.",
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "id": {
+              "description": "Registry-independent product identity.",
+              "pattern": "^product://[a-z0-9][a-z0-9.-]*/[a-z0-9][a-z0-9._-]*$",
+              "type": "string"
+            },
+            "name": {
+              "description": "Human-readable product name.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "version": {
+              "description": "Semantic version of this release.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "version"
+          ],
+          "type": "object"
+        },
+        "protocol": {
+          "const": "distribution/1",
+          "description": "Protocol discriminator and version gate.",
+          "type": "string"
+        },
+        "publisher": {
+          "additionalProperties": false,
+          "description": "The cryptographic identity that signs this release.",
+          "properties": {
+            "id": {
+              "description": "Registry-independent publisher identity.",
+              "pattern": "^publisher://[a-z0-9][a-z0-9.-]*$",
+              "type": "string"
+            },
+            "name": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "requirements": {
+          "description": "Requirements a consumer must satisfy.",
+          "items": {
+            "additionalProperties": false,
+            "description": "A protocol requirement a consumer must satisfy.",
+            "properties": {
+              "id": {
+                "description": "The required capability, interface or target token.",
+                "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "capability",
+                  "interface",
+                  "target"
+                ],
+                "type": "string"
+              },
+              "version": {
+                "description": "Optional version constraint for the requirement.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "protocol",
+        "product",
+        "publisher",
+        "artifacts",
+        "interfaces",
+        "permissions",
+        "requirements"
+      ],
+      "title": "Distribution Protocol Manifest",
+      "type": "object"
+    },
+    "product": {
+      "additionalProperties": false,
+      "description": "Registry-independent product identity for this release.",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "description": "Registry-independent product identity.",
+          "pattern": "^product://[a-z0-9][a-z0-9.-]*/[a-z0-9][a-z0-9._-]*$",
+          "type": "string"
+        },
+        "name": {
+          "description": "Human-readable product name.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "description": "Semantic version of this release.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "publisher": {
+      "additionalProperties": false,
+      "description": "The cryptographic identity that signs this release.",
+      "properties": {
+        "id": {
+          "description": "Registry-independent publisher identity.",
+          "pattern": "^publisher://[a-z0-9][a-z0-9.-]*$",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "requirement": {
+      "additionalProperties": false,
+      "description": "A protocol requirement a consumer must satisfy.",
+      "properties": {
+        "id": {
+          "description": "The required capability, interface or target token.",
+          "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "capability",
+            "interface",
+            "target"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Optional version constraint for the requirement.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "target": {
+      "additionalProperties": false,
+      "description": "Platform and architecture an artifact is built for.",
+      "properties": {
+        "arch": {
+          "description": "CPU architecture, or \"any\".",
+          "enum": [
+            "any",
+            "arm64",
+            "x64"
+          ],
+          "type": "string"
+        },
+        "os": {
+          "description": "Operating system, or \"any\".",
+          "enum": [
+            "any",
+            "linux",
+            "macos",
+            "windows"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "os",
+        "arch"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://distribution.protocol/schemas/manifest-1.json",
+  "$ref": "#/$defs/manifest",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,162 @@
+{
+  "vectors": [
+    {
+      "digest": "sha256:e145110e712e3ed0a6b233551b27a90aa39b4c93ed67e111ba2002d16e5ed1fa",
+      "expected": "{\"a\":2,\"b\":1,\"c\":3}",
+      "input": {
+        "a": 2,
+        "b": 1,
+        "c": 3
+      },
+      "name": "keys are sorted",
+      "rule": "Object members are sorted ascending by key"
+    },
+    {
+      "digest": "sha256:8d4ec158025ac90e3962f423d3201b8e960ee4280830656f6e536587a1f00fe9",
+      "expected": "{\"a\":3,\"z\":{\"x\":2,\"y\":1}}",
+      "input": {
+        "a": 3,
+        "z": {
+          "x": 2,
+          "y": 1
+        }
+      },
+      "name": "nested keys are sorted",
+      "rule": "Sorting applies at every depth"
+    },
+    {
+      "digest": "sha256:51bda7ab4e44726cde71fcb6e4b515357059bb6b6dd5146d1fc50f73f11678c6",
+      "expected": "[3,1,2]",
+      "input": [
+        3,
+        1,
+        2
+      ],
+      "name": "array order is preserved",
+      "rule": "Arrays keep their order; order is significant"
+    },
+    {
+      "digest": "sha256:b7674d3bc235a66d417357c0c4e21e834e6d899b1535ccdd3c988e9ce73d2c3d",
+      "expected": "[{\"a\":2,\"b\":1},{\"c\":4,\"d\":3}]",
+      "input": [
+        {
+          "a": 2,
+          "b": 1
+        },
+        {
+          "c": 4,
+          "d": 3
+        }
+      ],
+      "name": "array of objects",
+      "rule": "Array order is preserved even when members could be sorted"
+    },
+    {
+      "digest": "sha256:741f715b677c2be24c312d95eb73a37caaf7098bdc184d06ba2149fff0e2dae5",
+      "expected": "{\"a\":[1,2],\"b\":{\"c\":3}}",
+      "input": {
+        "a": [
+          1,
+          2
+        ],
+        "b": {
+          "c": 3
+        }
+      },
+      "name": "no insignificant whitespace",
+      "rule": "No spaces, newlines or tabs outside string literals"
+    },
+    {
+      "digest": "sha256:00982807411e917c1f6d277c904cd4f23942705edc314db799493b78cfcaf8c5",
+      "expected": "{\"f\":false,\"n\":1,\"s\":\"x\",\"t\":true,\"z\":null}",
+      "input": {
+        "f": false,
+        "n": 1,
+        "s": "x",
+        "t": true,
+        "z": null
+      },
+      "name": "primitive values",
+      "rule": "Literals use their JSON forms"
+    },
+    {
+      "digest": "sha256:aeeba1e56a144077f89e26c930dad7cf933e9383cfb8e33ddff618233b29be76",
+      "expected": "{\"a\":{},\"b\":[]}",
+      "input": {
+        "a": {},
+        "b": []
+      },
+      "name": "empty containers",
+      "rule": "Empty objects and arrays are preserved, not dropped"
+    },
+    {
+      "digest": "sha256:e313adcae40818c4a48a6f5a32c7ab937365ffb0962282a5bf1a629f8d456b63",
+      "expected": "{\"z\":0}",
+      "input": {
+        "z": 0
+      },
+      "name": "negative zero normalizes",
+      "rule": "-0 canonicalizes to 0"
+    },
+    {
+      "digest": "sha256:901d8cc12ea6cb74391412987c57143598863d87cd77910d437ae73bb4ed7800",
+      "expected": "{\"a\":0,\"b\":1,\"c\":-42}",
+      "input": {
+        "a": 0,
+        "b": 1,
+        "c": -42
+      },
+      "name": "integer numbers",
+      "rule": "Numbers use the shortest round-trip form"
+    },
+    {
+      "digest": "sha256:afbba8dd932be6739ee8058bcf0410a140626975d6d0b293c2040ad0098e8441",
+      "expected": "{\"a\":1.5,\"b\":0.1}",
+      "input": {
+        "a": 1.5,
+        "b": 0.1
+      },
+      "name": "decimal numbers",
+      "rule": "Decimals use the shortest round-trip form"
+    },
+    {
+      "digest": "sha256:97a1049b950c4967857a84a892616be14cfa33824839b42b557d9299074e9ea6",
+      "expected": "{\"s\":\"a\\\"b\\\\c\"}",
+      "input": {
+        "s": "a\"b\\c"
+      },
+      "name": "string escapes",
+      "rule": "Only \", \\ and C0 controls are escaped"
+    },
+    {
+      "digest": "sha256:8b0dedcc65ff1f97f68292d5313230c02bce406780a2eb576f70c4fad01c5fec",
+      "expected": "{\"n\":\"\\n\",\"t\":\"\\t\",\"z\":\"\\u0000\"}",
+      "input": {
+        "n": "\n",
+        "t": "\t",
+        "z": "\u0000"
+      },
+      "name": "control characters",
+      "rule": "C0 controls use short escapes or \\u00XX"
+    },
+    {
+      "digest": "sha256:fa9d26ea91df1dc157c06a7a2266758c5f1ebfc69dbf2374741ee65ede6895d6",
+      "expected": "{\"s\":\"héllo → wörld\"}",
+      "input": {
+        "s": "héllo → wörld"
+      },
+      "name": "non-ascii stays literal",
+      "rule": "Non-ASCII is emitted as UTF-8, not escaped"
+    },
+    {
+      "digest": "sha256:10f5cf091f466c42ded4dccd43c4aa9ba458eea781d29af59f6197cf505a97ad",
+      "expected": "{\"s\":\"Widget\"}",
+      "input": {
+        "s": "Widget"
+      },
+      "name": "unicode is case-preserving",
+      "rule": "Canonicalization does not case-fold; identity normalization does"
+    }
+  ],
+  "version": 1
+}

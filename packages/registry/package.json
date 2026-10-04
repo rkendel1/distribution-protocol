@@ -1,1 +1,23 @@
-{"name":"@distribution-protocol/registry","version":"0.1.0","type":"module","exports":"./src/index.mjs","scripts":{"test":"node --test src/index.test.mjs"}}
+{
+  "name": "@distribution-protocol/registry",
+  "version": "1.0.0",
+  "description": "Distribution Protocol registries: contract, memory, filesystem and HTTP implementations",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test ../conformance/src/conformance.test.mjs"
+  },
+  "dependencies": {
+    "@distribution-protocol/protocol": "1.0.0"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17"
+  }
+}
