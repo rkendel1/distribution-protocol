@@ -33,8 +33,18 @@ import {
   receiptFromAcquisition,
   validateManifest,
   parseProductId,
+  exportPublicKey,
+  createPublisherDocument,
+  signPublisherDocument,
+  verifyPublisherDocumentSignature,
+  keyStateAt,
+  KeyState,
+  verifyPublisher,
+  discoverPublisherDocument,
+  TrustOutcome,
 } from '../../protocol/src/index.mjs';
 import { LocalRegistry, HttpRegistryClient } from '../../registry/src/index.mjs';
+import { createTrustStore, DEFAULT_TRUST_PATH } from './trust-store.mjs';
 
 const USAGE = `distribution — a client for the Distribution Protocol
 
@@ -128,7 +138,7 @@ export async function run(argv) {
   // `manifest` and `release` take a subcommand; everything else treats its
   // arguments directly. Slice explicitly rather than searching for the command
   // name, which can also appear as a flag value (e.g. `--key release`).
-  const takesSubcommand = (command === 'manifest' || command === 'release') && subcommand && !subcommand.startsWith('--');
+  const takesSubcommand = (command === 'manifest' || command === 'release' || command === 'trust' || command === 'publisher') && subcommand && !subcommand.startsWith('--');
   const remainder = takesSubcommand ? [subcommand, ...rest] : [subcommand, ...rest].filter(Boolean);
   const { positional, flags } = parseArgs(remainder);
 
@@ -138,6 +148,10 @@ export async function run(argv) {
         return await runManifest(positional[0], positional, flags);
       case 'release':
         return await runRelease(positional[0], positional, flags);
+      case 'trust':
+        return await runTrust(positional[0], positional, flags);
+      case 'publisher':
+        return await runPublisher(positional[0], positional, flags);
       case 'publish':
         return await runPublish(positional, flags);
       case 'get':
@@ -324,6 +338,190 @@ async function runReceipt(positional, flags) {
   });
   process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
   return 0;
+}
+
+/**
+ * Resolve the trust store for this invocation.
+ *
+ * The location is explicit and overridable so trust state is never hidden
+ * global state, and so tests can point it at a temporary directory.
+ */
+function trustStoreFor(flags) {
+  return createTrustStore({ path: typeof flags.trust === 'string' ? flags.trust : DEFAULT_TRUST_PATH });
+}
+
+async function runTrust(action, positional, flags) {
+  const store = trustStoreFor(flags);
+
+  switch (action) {
+    case 'list': {
+      const publishers = await store.listPublishers();
+      if (publishers.length === 0) {
+        out('no publishers trusted');
+      } else {
+        for (const { publisher, keys } of publishers) {
+          const keyIds = keys.map((k) => k.id).join(', ');
+          out(`trusted  ${publisher}${keyIds ? `  keys: ${keyIds}` : ''}`);
+        }
+      }
+      return 0;
+    }
+
+    case 'add': {
+      const publisherId = positional[1];
+      if (!publisherId) return fail('usage: distribution trust add <publisher-id> [--key-id <id>] [--public-key <pem>]');
+      // A private key must never be accepted here; the store rejects it.
+      let publicKey;
+      if (typeof flags['public-key'] === 'string') publicKey = await readFile(flags['public-key'], 'utf8');
+      await store.addPublisher(publisherId, {
+        keyId: typeof flags['key-id'] === 'string' ? flags['key-id'] : undefined,
+        publicKey,
+      });
+      out(`trusted  ${publisherId}`);
+      return 0;
+    }
+
+    case 'remove': {
+      const publisherId = positional[1];
+      if (!publisherId) return fail('usage: distribution trust remove <publisher-id>');
+      const removed = await store.removePublisher(publisherId);
+      out(removed ? `untrusted  ${publisherId}` : `${publisherId} was not trusted`);
+      return 0;
+    }
+
+    case 'show': {
+      const publisherId = positional[1];
+      if (!publisherId) return fail('usage: distribution trust show <publisher-id>');
+      const info = await store.showPublisher(publisherId);
+      out(`${info.trusted ? 'trusted' : 'untrusted'}  ${info.publisher}`);
+      for (const key of info.keys) out(`    key ${key.id}  ${key.fingerprint}`);
+      return 0;
+    }
+
+    case 'path': {
+      out(store.path);
+      return 0;
+    }
+
+    default:
+      return fail(`unknown trust subcommand: ${action ?? '(none)'}`);
+  }
+}
+
+async function runPublisher(action, positional, flags) {
+  switch (action) {
+    case 'create': {
+      const publisherId = positional[1] ?? (typeof flags.publisher === 'string' ? flags.publisher : undefined);
+      if (!publisherId) return fail('usage: distribution publisher create <publisher-id> [--out <key.pem>] [--document <doc.json>]');
+
+      const { publicKey, privateKey } = generatePublisherKeypair();
+      const keyId = typeof flags['key-id'] === 'string' ? flags['key-id'] : 'key-1';
+      const document = createPublisherDocument({
+        publisher: publisherId,
+        name: typeof flags.name === 'string' ? flags.name : undefined,
+        keys: [{ id: keyId, algorithm: 'ed25519', publicKey: exportPublicKey(publicKey) }],
+      });
+      const envelope = signPublisherDocument(document, privateKey);
+
+      // The private key is written only to the requested path, with owner-only
+      // permissions. It never appears in the document or in stdout. The public
+      // half is always written alongside so a consumer can pin it.
+      if (typeof flags.out === 'string') {
+        await writeFile(flags.out, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
+        await writeFile(`${flags.out}.pub`, publicKey.export({ type: 'spki', format: 'pem' }));
+        out(`private key -> ${flags.out}  (keep secret)`);
+        out(`public key  -> ${flags.out}.pub`);
+      }
+      const json = `${JSON.stringify(envelope, null, 2)}\n`;
+      if (typeof flags.document === 'string') {
+        await writeFile(flags.document, json);
+        out(`publisher document -> ${flags.document}`);
+      } else {
+        process.stdout.write(json);
+      }
+      out(`publisher ${publisherId}  key ${keyId}`);
+      return 0;
+    }
+
+    case 'keys': {
+      const file = positional[1];
+      if (!file) return fail('usage: distribution publisher keys <publisher-document.json>');
+      const envelope = JSON.parse(await readFile(file, 'utf8'));
+      const doc = envelope.document ?? envelope;
+      for (const key of doc.keys ?? []) {
+        out(`${key.id}  ${key.state ?? KeyState.ACTIVE}  ${key.publicKey?.slice(0, 16)}…`);
+      }
+      return 0;
+    }
+
+    case 'verify': {
+      const publisherId = positional[1] ?? (typeof flags.publisher === 'string' ? flags.publisher : undefined);
+      const file = typeof flags.file === 'string' ? flags.file : positional[2];
+      if (!publisherId) return fail('usage: distribution publisher verify <publisher-id> [--file <doc.json>]');
+
+      // With a document, verify that document against its own keys.
+      if (file) {
+        const envelope = JSON.parse(await readFile(file, 'utf8'));
+        const result = verifyPublisherDocumentSignature(envelope);
+        if (!result.valid) return fail(`publisher document is NOT valid: ${result.reason}`);
+        out(`ok  ${result.publisherId}`);
+        for (const key of envelope.document.keys ?? []) out(`    key ${key.id}  ${keyStateAt(key)}`);
+        return 0;
+      }
+
+      // Without a document, report what local trust state says.
+      const info = await trustStoreFor(flags).showPublisher(publisherId);
+      out(`${info.trusted ? 'trusted' : 'untrusted'}  ${info.publisher}`);
+      return info.trusted ? 0 : 1;
+    }
+
+case 'rotate': {
+      const file = positional[1];
+      if (!file) return fail('usage: distribution publisher rotate <publisher-document.json> [--key-id <id>]');
+      const envelope = JSON.parse(await readFile(file, 'utf8'));
+      const doc = envelope.document ?? envelope;
+      const keyId = typeof flags['key-id'] === 'string' ? flags['key-id'] : `key-${doc.keys.length + 1}`;
+      if (doc.keys.some((k) => k.id === keyId)) return fail(`key id ${keyId} already exists; choose another`);
+
+      const { publicKey } = generatePublisherKeypair();
+      const next = {
+        ...doc,
+        keys: [...doc.keys, { id: keyId, algorithm: 'ed25519', publicKey: exportPublicKey(publicKey), state: KeyState.ACTIVE }],
+      };
+      if (typeof flags.out === 'string') {
+        await writeFile(flags.out, `${JSON.stringify(next, null, 2)}\n`);
+        out(`rotated  added ${keyId}`);
+        out(`document -> ${flags.out}`);
+        out(`note     re-sign with an existing key to publish the rotation`);
+      } else {
+        process.stdout.write(`${JSON.stringify(next, null, 2)}\n`);
+      }
+      return 0;
+    }
+
+    case 'revoke': {
+      const file = positional[1];
+      const keyId = positional[2] ?? (typeof flags['key-id'] === 'string' ? flags['key-id'] : undefined);
+      if (!file || !keyId) return fail('usage: distribution publisher revoke <publisher-document.json> <key-id>');
+      const envelope = JSON.parse(await readFile(file, 'utf8'));
+      const doc = envelope.document ?? envelope;
+      if (!doc.keys.some((k) => k.id === keyId)) return fail(`no key ${keyId} in this document`);
+
+      const next = { ...doc, keys: doc.keys.map((k) => (k.id === keyId ? { ...k, state: KeyState.REVOKED } : k)) };
+      if (typeof flags.out === 'string') {
+        await writeFile(flags.out, `${JSON.stringify(next, null, 2)}\n`);
+        out(`revoked  ${keyId}`);
+        out(`document -> ${flags.out}`);
+        out(`note     historical releases stay valid; new ones signed by it are refused`);
+      } else {
+        process.stdout.write(`${JSON.stringify(next, null, 2)}\n`);
+      }
+      return 0;
+    }
+
+    default:
+      return fail(`unknown publisher subcommand: ${action ?? '(none)'}`);
+  }
 }
 
 async function runKeygen(flags) {

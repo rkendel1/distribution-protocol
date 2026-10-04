@@ -9,6 +9,12 @@
 import { createHash } from 'node:crypto';
 
 import { generatePublisherKeypair, signRelease } from '../../protocol/src/signing.mjs';
+import {
+  createPublisherDocument,
+  exportPublicKey,
+  signPublisherDocument,
+} from '../../protocol/src/publisher.mjs';
+import { createTrustPolicy } from '../../protocol/src/trust.mjs';
 import { digestOfBytes } from '../../protocol/src/artifact.mjs';
 import { productId, publisherId } from '../../protocol/src/identifiers.mjs';
 
@@ -67,3 +73,48 @@ export function makeManifest(overrides = {}) {
 export function makeRelease(manifest = makeManifest(), keys = testKeys()) {
   return signRelease(manifest, keys.privateKey);
 }
+
+// --- publisher fixtures -----------------------------------------------------
+
+/**
+ * Build a publisher document signed by one of its own keys.
+ *
+ * Each declared key gets freshly generated material unless the caller supplies
+ * its own, so tests that need several distinct keys (rotation, revocation) can
+ * simply declare several ids.
+ *
+ * @param {object} [options]
+ * @param {string} [options.publisher]
+ * @param {Array<object>} [options.declarations]
+ *   full key declarations; generated from `keyIds` when omitted
+ * @param {string[]} [options.keyIds] names to generate key material for
+ * @param {Record<string, object>} [options.material] id -> KeyObject
+ * @returns {{envelope: object, material: Record<string, object>}}
+ */
+export function makePublisherDocument({
+  publisher = PUBLISHER,
+  declarations,
+  keyIds = ['key-2026'],
+  material = {},
+} = {}) {
+  const entries = (declarations ?? keyIds).map((entry) => {
+    if (typeof entry === 'string') {
+      material[entry] ??= generatePublisherKeypair();
+      return { id: entry, algorithm: 'ed25519', publicKey: exportPublicKey(material[entry].publicKey) };
+    }
+    if (entry.publicKey === undefined) {
+      material[entry.id] ??= generatePublisherKeypair();
+      return { ...entry, algorithm: 'ed25519', publicKey: exportPublicKey(material[entry.id].publicKey) };
+    }
+    return entry;
+  });
+
+  const doc = createPublisherDocument({ publisher, name: 'Acme', keys: entries });
+
+  // Self-sign with the first declared key: the document is its own anchor.
+  const signer = material[entries[0].id] ?? testKeys();
+  return { envelope: signPublisherDocument(doc, signer.privateKey), material };
+}
+
+/** A trust policy trusting only the fixture publisher. */
+export const TRUST_POLICY = createTrustPolicy({ publishers: [PUBLISHER] });

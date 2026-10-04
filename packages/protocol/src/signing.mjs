@@ -29,6 +29,7 @@ import { createHash, createPublicKey, generateKeyPairSync, sign, verify } from '
 import { InvalidReleaseError, SignatureError } from './errors.mjs';
 import { canonicalBytes } from './canonical.mjs';
 import { assertValidManifest, releaseIdOf } from './validate.mjs';
+import { findKey, keyFingerprint } from './publisher.mjs';
 
 /** The only signature algorithm defined by protocol version 1. */
 export const SIGNATURE_ALGORITHM = 'ed25519';
@@ -117,12 +118,43 @@ export function assertValidReleaseShape(release) {
  * The manifest is validated first: an invalid manifest must never be signed,
  * because that would produce a signature over bytes no verifier will accept.
  *
+ * When a publisher document is supplied, the release is BOUND to publisher
+ * identity: `keyId` becomes the publisher's chosen name for the signing key and
+ * `keyFingerprint` pins the exact key material. Without that binding a release
+ * is only self-consistent — it would carry a derived key id that says nothing
+ * about which publisher signed it, and any holder of a matching key could
+ * claim any publisher.
+ *
  * @param {object} manifest a valid manifest
  * @param {import('node:crypto').KeyObject} privateKey publisher signing key
+ * @param {object} [options]
+ * @param {string} [options.keyId] publisher-chosen key name, e.g. `key-2026`
+ * @param {object} [options.publisherDocument] used to enforce publisher binding
  * @returns {object} a release envelope
  */
-export function signRelease(manifest, privateKey) {
+export function signRelease(manifest, privateKey, { keyId, publisherDocument } = {}) {
   assertValidManifest(manifest);
+
+  // When a publisher document is given, refuse to sign unless this key is
+  // actually declared by the publisher the manifest names. This stops a
+  // publisher from releasing a product under an identity whose keys are not
+  // theirs, and keeps the release's keyId resolvable against the document.
+  if (publisherDocument) {
+    const claimed = manifest.publisher.id;
+    if (publisherDocument.document?.publisher?.id !== claimed) {
+      throw new SignatureError(
+        `manifest claims publisher ${claimed} but the publisher document is for ${publisherDocument.document?.publisher?.id}`,
+        { publisher: claimed, document: publisherDocument.document?.publisher?.id },
+      );
+    }
+    const declared = findKey(publisherDocument.document, keyId, keyFingerprint(privateKey));
+    if (!declared) {
+      throw new SignatureError(
+        `signing key is not declared by publisher document for ${claimed}`,
+        { publisher: claimed, keyId: keyId ?? null },
+      );
+    }
+  }
 
   const message = canonicalBytes(manifest);
   let value;
@@ -140,16 +172,26 @@ export function signRelease(manifest, privateKey) {
     type: 'spki',
   });
 
-  return {
+  const envelope = {
     type: RELEASE_TYPE,
     manifest,
     signature: {
       algorithm: SIGNATURE_ALGORITHM,
-      keyId: keyIdOf(publicKey),
+      // A publisher-chosen name is the meaningful id; the derived fingerprint is
+      // retained as a fallback so pre-binding releases remain verifiable.
+      keyId: keyId ?? keyIdOf(publicKey),
       publicKey: publicKeyDer,
       value,
     },
   };
+
+  // Only record the fingerprint when a publisher-chosen keyId was supplied, so
+  // unbound (PR-2 style) releases keep their original shape.
+  if (keyId !== undefined) {
+    envelope.signature.keyFingerprint = keyFingerprint(privateKey);
+  }
+
+  return envelope;
 }
 
 /**

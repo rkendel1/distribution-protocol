@@ -93,6 +93,37 @@ export {
   releaseIdOfEnvelope,
 } from './signing.mjs';
 
+// Publisher identity and documents
+export {
+  PUBLISHER_TYPE,
+  KeyState,
+  KEY_STATES,
+  SIGNING_STATES,
+  isValidKeyId,
+  isValidTimestamp,
+  keyFingerprint,
+  importPublicKey,
+  exportPublicKey,
+  createPublisherDocument,
+  signPublisherDocument,
+  verifyPublisherDocumentSignature,
+  validatePublisherDocument,
+  findKey,
+  keyStateAt,
+} from './publisher.mjs';
+
+// Trust
+export {
+  TrustOutcome,
+  DENIED_OUTCOMES,
+  createTrustPolicy,
+  policyTrustsPublisher,
+  verifyPublisher,
+  verifyPublisherDocument,
+  allowNewRelease,
+  discoverPublisherDocument,
+} from './trust.mjs';
+
 // Resolution
 export {
   ResolutionFailure,
