@@ -29,7 +29,7 @@ import { createHash, createPublicKey, generateKeyPairSync, sign, verify } from '
 import { InvalidReleaseError, SignatureError } from './errors.mjs';
 import { canonicalBytes } from './canonical.mjs';
 import { assertValidManifest, releaseIdOf } from './validate.mjs';
-import { findKey, keyFingerprint } from './publisher.mjs';
+import { findKey, keyFingerprint, documentIdOf } from './publisher.mjs';
 
 /** The only signature algorithm defined by protocol version 1. */
 export const SIGNATURE_ALGORITHM = 'ed25519';
@@ -189,6 +189,15 @@ export function signRelease(manifest, privateKey, { keyId, publisherDocument } =
   // unbound (PR-2 style) releases keep their original shape.
   if (keyId !== undefined) {
     envelope.signature.keyFingerprint = keyFingerprint(privateKey);
+  }
+
+  // Bind the release to the document that authorized its signer. Without this a
+  // consumer could only judge the release against the LATEST publisher
+  // document, which would let a later revocation retroactively invalidate a
+  // historical release. Recording the authorizing document is what makes
+  // "was this key authorized at publication time?" answerable.
+  if (publisherDocument) {
+    envelope.signature.publisherDocument = documentIdOf(publisherDocument.document);
   }
 
   return envelope;

@@ -38,6 +38,7 @@ import { verify as cryptoVerify } from 'node:crypto';
 
 import {
   KeyState,
+  documentIdOf,
   findKey,
   importPublicKey,
   keyFingerprint,
@@ -74,6 +75,12 @@ export const TrustOutcome = Object.freeze({
   OWNERSHIP_VIOLATION: 'OWNERSHIP_VIOLATION',
   /** The publisher document is structurally invalid. */
   INVALID_PUBLISHER_DOCUMENT: 'INVALID_PUBLISHER_DOCUMENT',
+  /** A publisher document's signature does not verify. */
+  INVALID_PUBLISHER_SIGNATURE: 'INVALID_PUBLISHER_SIGNATURE',
+  /** Registries returned different documents for the same publisher. */
+  CONFLICTING_PUBLISHER_DOCUMENT: 'CONFLICTING_PUBLISHER_DOCUMENT',
+  /** No registry had a document for this publisher. */
+  PUBLISHER_NOT_FOUND: 'PUBLISHER_NOT_FOUND',
 });
 
 /** Outcomes that indicate a well-formed but untrusted release. */
@@ -341,6 +348,185 @@ export function allowNewRelease({ publisherDocument, keyId, fingerprint, at } = 
   }
 
   return { allowed: true, outcome: TrustOutcome.VALID, reason: null };
+}
+
+/**
+ * Verify a release against the publisher document that was in force when it
+ * was signed, rather than against whatever document is current today.
+ *
+ * This is what makes historical verification possible. Judging a release
+ * against the latest document would mean revoking a key retroactively erases
+ * every release it ever signed — destroying audit trails. Instead a release
+ * records WHICH document authorized it, and that document's state at
+ * publication time is what counts.
+ *
+ *   key-1 signs release 1.0.0   (authorized by document #1)
+ *   key-1 revoked                (document #2 supersedes #1)
+ *   consumer fetches 1.0.0       (still authorized — document #1 says so)
+ *
+ * @param {object} params
+ * @param {object} params.release a signed release envelope
+ * @param {object[]} params.documents the publisher's document lineage, any order
+ * @param {object} [params.policy] a {@link TrustPolicy}
+ * @param {string} [params.at] fallback instant when the release has none
+ * @returns {{outcome: string, publisher: string|null, keyId: string|null, reason: string|null}}
+ */
+export function verifyPublisherAt({ release, documents, policy, at } = {}) {
+  const fail = (outcome, reason, publisher = null) => ({
+    outcome,
+    publisher: publisher ?? release?.manifest?.publisher?.id ?? null,
+    keyId: release?.signature?.keyId ?? null,
+    reason,
+  });
+
+  const lineage = documents ?? [];
+  if (lineage.length === 0) {
+    return fail(TrustOutcome.UNKNOWN_PUBLISHER, 'no publisher documents supplied');
+  }
+
+  // The release names the document that authorized it. Prefer that; fall back
+  // to a document whose key was live at publication time, for releases
+  // predating binding.
+  const boundId = release?.signature?.publisherDocument ?? null;
+  const publishedAt = release?.manifest?.publishedAt ?? at;
+
+  let envelope = boundId ? lineage.find((doc) => documentIdOf(doc.document) === boundId) : null;
+  if (!envelope && !boundId) {
+    // Only unbound (pre-binding) releases may fall back. Once a release claims
+    // a specific authorizing document, honouring the claim strictly is what
+    // stops a registry from substituting a different document from the lineage.
+    envelope = lineage.find((doc) => {
+      const key = findKey(doc.document, release?.signature?.keyId, release?.signature?.keyFingerprint);
+      return key && keyStateAt(key, publishedAt) !== KeyState.REVOKED;
+    });
+  }
+
+  if (!envelope) {
+    return fail(
+      TrustOutcome.UNKNOWN_PUBLISHER,
+      boundId
+        ? `publisher lineage does not contain document ${boundId}`
+        : 'no publisher document authorized this signing key',
+    );
+  }
+
+  // The authorizing document must itself be genuine.
+  const docCheck = verifyPublisherDocumentSignature(envelope);
+  if (!docCheck.valid) {
+    return fail(
+      TrustOutcome.INVALID_PUBLISHER_SIGNATURE,
+      `authorizing publisher document is not valid: ${docCheck.reason}`,
+      docCheck.publisherId,
+    );
+  }
+
+  const publisherId = envelope.document.publisher.id;
+  if (!policyTrustsPublisher(policy, publisherId)) {
+    return fail(TrustOutcome.UNKNOWN_PUBLISHER, `publisher ${publisherId} is not in the trust policy`, publisherId);
+  }
+  if (release?.manifest?.publisher?.id !== publisherId) {
+    return fail(
+      TrustOutcome.IDENTITY_MISMATCH,
+      `release claims publisher ${release?.manifest?.publisher?.id} but the authorizing document is ${publisherId}`,
+      publisherId,
+    );
+  }
+
+  const key = findKey(envelope.document, release.signature.keyId, release.signature.keyFingerprint ?? null);
+  if (!key) {
+    return fail(
+      TrustOutcome.UNKNOWN_KEY,
+      `document declares no key ${JSON.stringify(String(release.signature.keyId))}`,
+      publisherId,
+    );
+  }
+
+  // Authorization is evaluated AT PUBLICATION TIME against THIS document. A key
+  // later revoked in a successor document stays authorized here — that is
+  // exactly what revocation must not undo.
+  const stateAtPublication = keyStateAt(key, publishedAt);
+  if (stateAtPublication === KeyState.EXPIRED) {
+    return fail(TrustOutcome.KEY_EXPIRED, `key ${key.id} was not valid at ${publishedAt}`, publisherId);
+  }
+  if (stateAtPublication === KeyState.REVOKED) {
+    return fail(
+      TrustOutcome.KEY_REVOKED,
+      `key ${key.id} was already revoked when this release was signed at ${publishedAt}`,
+      publisherId,
+    );
+  }
+
+  const base = verifyPublisher({ release, publisherDocument: envelope, policy, at: publishedAt });
+  return {
+    ...base,
+    // Report the CURRENT state while deciding at publication time; an audit
+    // trail needs both.
+    keyState: keyStateAt(key),
+    authorizedAt: publishedAt,
+    publisherDocument: documentIdOf(envelope.document),
+    sequence: envelope.document.sequence ?? null,
+  };
+}
+
+/**
+ * Verify an entire publisher lineage.
+ *
+ * Each document must be genuine, sequences must be contiguous, and every
+ * predecessor link must match. A break means the chain has been edited and the
+ * history cannot be trusted.
+ *
+ * @param {object[]} envelopes publisher document envelopes, any order
+ * @returns {{valid: boolean, reason: string|null, length: number, head: object|null}}
+ */
+export function verifyPublisherLineage(envelopes) {
+  const ordered = [...(envelopes ?? [])].sort(
+    (a, b) => (a?.document?.sequence ?? 0) - (b?.document?.sequence ?? 0),
+  );
+
+  if (ordered.length === 0) return { valid: false, reason: 'lineage is empty', length: 0, head: null };
+
+  const publisherId = ordered[0].document?.publisher?.id;
+  let previousId = null;
+
+  for (const [index, envelope] of ordered.entries()) {
+    const result = verifyPublisherDocumentSignature(envelope);
+    if (!result.valid) {
+      return {
+        valid: false,
+        reason: `document #${index + 1} is invalid: ${result.reason}`,
+        length: ordered.length,
+        head: null,
+      };
+    }
+    if (envelope.document.publisher.id !== publisherId) {
+      return {
+        valid: false,
+        reason: `document #${index + 1} describes a different publisher`,
+        length: ordered.length,
+        head: null,
+      };
+    }
+    const sequence = envelope.document.sequence ?? index + 1;
+    if (sequence !== index + 1) {
+      return {
+        valid: false,
+        reason: `lineage has a gap: expected sequence ${index + 1}, found ${sequence}`,
+        length: ordered.length,
+        head: null,
+      };
+    }
+    if ((envelope.document.previousDocument ?? null) !== previousId) {
+      return {
+        valid: false,
+        reason: `document #${index + 1} does not follow its stated predecessor`,
+        length: ordered.length,
+        head: null,
+      };
+    }
+    previousId = documentIdOf(envelope.document);
+  }
+
+  return { valid: true, reason: null, length: ordered.length, head: ordered[ordered.length - 1] };
 }
 
 /**

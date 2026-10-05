@@ -16,11 +16,18 @@
  *   distribution resolve <product-id> --os macos --arch arm64 --registry <url>
  *   distribution acquire <release-id> --registry <url> --out <file>
  *   distribution receipt <release-id> --registry <url>
+ *   distribution publisher create <publisher-id> --out <key.pem> --document <doc.json>
+ *   distribution publisher verify <doc.json>
+ *   distribution publisher verify <publisher-id> --registry <url>
+ *   distribution publisher rotate <doc.json> --key <new> --sign-with <current> --key-file <pem>
+ *   distribution publisher revoke <doc.json> --key <id> --sign-with <id> --key-file <pem>
+ *   distribution trust add <publisher-id> --publisher-document <doc.json>
  *
  * Exit codes: 0 success, 1 failure, 2 usage error.
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
+import { createPrivateKey, createPublicKey } from 'node:crypto';
 
 import {
   assertValidManifest,
@@ -41,6 +48,10 @@ import {
   KeyState,
   verifyPublisher,
   discoverPublisherDocument,
+  discoverPublisher,
+  rotatePublisherKey,
+  revokePublisherKey,
+  documentIdOf,
   TrustOutcome,
 } from '../../protocol/src/index.mjs';
 import { LocalRegistry, HttpRegistryClient } from '../../registry/src/index.mjs';
@@ -369,7 +380,40 @@ async function runTrust(action, positional, flags) {
 
     case 'add': {
       const publisherId = positional[1];
-      if (!publisherId) return fail('usage: distribution trust add <publisher-id> [--key-id <id>] [--public-key <pem>]');
+      const docPath = typeof flags['publisher-document'] === 'string' ? flags['publisher-document'] : undefined;
+
+      // Bootstrap from a signed publisher document. The document is verified
+      // BEFORE it becomes a trust anchor: a registry, a download, or a
+      // colleague can supply one, and none of them get to define what we trust.
+      if (docPath) {
+        if (!publisherId) return fail('usage: distribution trust add <publisher-id> --publisher-document <doc.json>');
+        const envelope = JSON.parse(await readFile(docPath, 'utf8'));
+
+        const check = verifyPublisherDocumentSignature(envelope);
+        if (!check.valid) {
+          return fail(`refusing to trust: publisher document is NOT valid: ${check.reason}`);
+        }
+        if (check.publisherId !== publisherId) {
+          return fail(`refusing to trust: document describes ${check.publisherId}, not ${publisherId}`);
+        }
+
+        // Trust the PUBLISHER, not the individual key. Key rotation then stays
+        // transparent to the consumer.
+        await store.addPublisher(publisherId, { document: envelope });
+        out(`trusted  ${publisherId}`);
+        out(`anchor   document ${documentIdOf(envelope.document)}  sequence ${envelope.document.sequence ?? 1}`);
+        for (const key of envelope.document.keys ?? []) {
+          out(`    key ${key.id}  ${key.state ?? KeyState.ACTIVE}`);
+        }
+        out('note     publisher-level trust survives future key rotation');
+        return 0;
+      }
+
+      if (!publisherId) {
+        return fail(
+          'usage: distribution trust add <publisher-id> [--key-id <id> --public-key <pem>] | --publisher-document <doc.json>',
+        );
+      }
       // A private key must never be accepted here; the store rejects it.
       let publicKey;
       if (typeof flags['public-key'] === 'string') publicKey = await readFile(flags['public-key'], 'utf8');
@@ -416,12 +460,18 @@ async function runPublisher(action, positional, flags) {
 
       const { publicKey, privateKey } = generatePublisherKeypair();
       const keyId = typeof flags['key-id'] === 'string' ? flags['key-id'] : 'key-1';
-      const document = createPublisherDocument({
-        publisher: publisherId,
-        name: typeof flags.name === 'string' ? flags.name : undefined,
-        keys: [{ id: keyId, algorithm: 'ed25519', publicKey: exportPublicKey(publicKey) }],
-      });
-      const envelope = signPublisherDocument(document, privateKey);
+      const document = {
+        ...createPublisherDocument({
+          publisher: publisherId,
+          name: typeof flags.name === 'string' ? flags.name : undefined,
+          keys: [{ id: keyId, algorithm: 'ed25519', publicKey: exportPublicKey(publicKey) }],
+        }),
+        // A new identity starts its lineage at sequence 1 with no predecessor.
+        sequence: 1,
+        previousDocument: null,
+        ...(typeof flags['published-at'] === 'string' ? { publishedAt: flags['published-at'] } : {}),
+      };
+      const envelope = signPublisherDocument(document, privateKey, { keyId });
 
       // The private key is written only to the requested path, with owner-only
       // permissions. It never appears in the document or in stdout. The public
@@ -455,9 +505,28 @@ async function runPublisher(action, positional, flags) {
     }
 
     case 'verify': {
-      const publisherId = positional[1] ?? (typeof flags.publisher === 'string' ? flags.publisher : undefined);
+      // Three forms, none of which assume anything about a registry:
+      //   publisher verify <doc.json>
+      //   publisher verify <publisher-id> --file <doc.json>
+      //   publisher verify <publisher-id> --registry <url>
+      const first = positional[1];
+
+      // A path to a document verifies that document on its own merits.
+      if (first && !first.includes('://')) {
+        const envelope = JSON.parse(await readFile(first, 'utf8'));
+        const result = verifyPublisherDocumentSignature(envelope);
+        if (!result.valid) return fail(`publisher document is NOT valid: ${result.reason}`);
+        out(`ok  ${result.publisherId}`);
+        out(`document ${documentIdOf(envelope.document)}  sequence ${envelope.document.sequence ?? 1}`);
+        for (const key of envelope.document.keys ?? []) out(`    key ${key.id}  ${keyStateAt(key)}`);
+        return 0;
+      }
+
+      const publisherId = first ?? (typeof flags.publisher === 'string' ? flags.publisher : undefined);
       const file = typeof flags.file === 'string' ? flags.file : positional[2];
-      if (!publisherId) return fail('usage: distribution publisher verify <publisher-id> [--file <doc.json>]');
+      if (!publisherId) {
+        return fail('usage: distribution publisher verify <publisher.json> | <publisher-id> --file <doc.json>');
+      }
 
       // With a document, verify that document against its own keys.
       if (file) {
@@ -469,59 +538,232 @@ async function runPublisher(action, positional, flags) {
         return 0;
       }
 
-      // Without a document, report what local trust state says.
+      // With a registry, DISCOVER the document, then verify, then apply trust.
+      // Retrieval is not trust: the policy still has the final word.
+      const registry = await registryFromFlags(flags);
+      if (registry) {
+        const found = await discoverPublisher({
+          publisher: publisherId,
+          registries: [registry],
+          policy: await policyFromFlags(flags),
+        });
+        if (found.outcome !== TrustOutcome.VALID) {
+          return fail(`${found.outcome}: ${found.reason ?? 'publisher could not be verified'}`);
+        }
+        out(`ok  ${found.publisher}`);
+        out(`document ${documentIdOf(found.head.document)}  sequence ${found.head.document.sequence}`);
+        for (const key of found.head.document.keys ?? []) {
+          out(`    key ${key.id}  ${keyStateAt(key)}`);
+        }
+        out(`registry supplied evidence; trust came from the local policy`);
+        return 0;
+      }
+
+      // With neither, report what local trust state says.
       const info = await trustStoreFor(flags).showPublisher(publisherId);
       out(`${info.trusted ? 'trusted' : 'untrusted'}  ${info.publisher}`);
       return info.trusted ? 0 : 1;
     }
 
 case 'rotate': {
-      const file = positional[1];
-      if (!file) return fail('usage: distribution publisher rotate <publisher-document.json> [--key-id <id>]');
+      // Rotation is atomic and signed: the current key authorizes the new key
+      // and signs the resulting document. No unsigned intermediate is ever
+      // written — a document nobody can verify is not evidence.
+      const file = positional[1] ?? (typeof flags.document === 'string' ? flags.document : undefined);
+      if (!file) {
+        return fail(
+          'usage: distribution publisher rotate <publisher-document.json> --key <new-key-id> --sign-with <current-key-id> [--key-file <new-key.pem>]',
+        );
+      }
+
       const envelope = JSON.parse(await readFile(file, 'utf8'));
       const doc = envelope.document ?? envelope;
-      const keyId = typeof flags['key-id'] === 'string' ? flags['key-id'] : `key-${doc.keys.length + 1}`;
-      if (doc.keys.some((k) => k.id === keyId)) return fail(`key id ${keyId} already exists; choose another`);
+      const newKeyId = typeof flags.key === 'string' ? flags.key : `key-${doc.keys.length + 1}`;
+      const signWith = typeof flags['sign-with'] === 'string' ? flags['sign-with'] : undefined;
+      if (doc.keys.some((k) => k.id === newKeyId)) return fail(`key id ${newKeyId} already exists; choose another`);
 
-      const { publicKey } = generatePublisherKeypair();
-      const next = {
-        ...doc,
-        keys: [...doc.keys, { id: keyId, algorithm: 'ed25519', publicKey: exportPublicKey(publicKey), state: KeyState.ACTIVE }],
-      };
-      if (typeof flags.out === 'string') {
-        await writeFile(flags.out, `${JSON.stringify(next, null, 2)}\n`);
-        out(`rotated  added ${keyId}`);
-        out(`document -> ${flags.out}`);
-        out(`note     re-sign with an existing key to publish the rotation`);
-      } else {
-        process.stdout.write(`${JSON.stringify(next, null, 2)}\n`);
+      // A rotation must name the key that authorizes it. With a single key in
+      // the document there is no ambiguity, so we infer it.
+      const authorizingId = signWith ?? (doc.keys.length === 1 ? doc.keys[0].id : undefined);
+      if (!authorizingId) {
+        return fail('--sign-with <key-id> is required: a rotation must be signed by a currently authorized key');
       }
-      return 0;
+
+      // --key-file is the AUTHORIZING (current) key. The new key is always
+      // generated fresh — reusing the current key would make rotation a no-op
+      // that merely renames it, which is not rotation at all.
+      let signingKey;
+      try {
+        signingKey = await readSigningKey(flags);
+      } catch (err) {
+        return fail(err.message);
+      }
+
+      // Generate the replacement key and persist it. Discarding it would leave
+      // the publisher authorizing a key nobody holds, which silently bricks the
+      // identity on the next rotation.
+      const generated = generatePublisherKeypair();
+      const newKey = generated.publicKey;
+      let newKeyPath = null;
+      if (typeof flags.out === 'string') {
+        newKeyPath = `${flags.out}.${newKeyId}.pem`;
+        await writeFile(newKeyPath, generated.privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
+      }
+
+      let next;
+      try {
+        next = rotatePublisherKey({
+          previous: envelope.document ? envelope : { ...envelope, document: doc },
+          newKeyId,
+          newKey,
+          signingKeyId: authorizingId,
+          signingKey,
+          publishedAt: nowStamp(),
+        });
+      } catch (err) {
+        return fail(err.message);
+      }
+
+      return emitDocument(next, 'rotated', flags, [
+        `authorized ${newKeyId}`,
+        `signed by ${authorizingId}`,
+        ...(newKeyPath ? [`private key -> ${newKeyPath} (mode 0600)`] : []),
+      ]);
     }
 
     case 'revoke': {
-      const file = positional[1];
-      const keyId = positional[2] ?? (typeof flags['key-id'] === 'string' ? flags['key-id'] : undefined);
-      if (!file || !keyId) return fail('usage: distribution publisher revoke <publisher-document.json> <key-id>');
+      const file = positional[1] ?? (typeof flags.document === 'string' ? flags.document : undefined);
+      const keyId = positional[2] ?? (typeof flags.key === 'string' ? flags.key : undefined);
+      if (!file || !keyId) {
+        return fail(
+          'usage: distribution publisher revoke <publisher-document.json> --key <key-id> --sign-with <key-id> --key-file <key.pem>',
+        );
+      }
+
       const envelope = JSON.parse(await readFile(file, 'utf8'));
       const doc = envelope.document ?? envelope;
       if (!doc.keys.some((k) => k.id === keyId)) return fail(`no key ${keyId} in this document`);
 
-      const next = { ...doc, keys: doc.keys.map((k) => (k.id === keyId ? { ...k, state: KeyState.REVOKED } : k)) };
-      if (typeof flags.out === 'string') {
-        await writeFile(flags.out, `${JSON.stringify(next, null, 2)}\n`);
-        out(`revoked  ${keyId}`);
-        out(`document -> ${flags.out}`);
-        out(`note     historical releases stay valid; new ones signed by it are refused`);
-      } else {
-        process.stdout.write(`${JSON.stringify(next, null, 2)}\n`);
+      // A state transition nobody can verify is not a transition. Revocation is
+      // refused without an explicit, authorized signer.
+      const signWith = typeof flags['sign-with'] === 'string' ? flags['sign-with'] : undefined;
+      if (!signWith) {
+        return fail('--sign-with <key-id> is required: revocation must be signed by an authorized key');
       }
-      return 0;
+
+      let signingKey;
+      try {
+        signingKey = await readSigningKey(flags);
+      } catch (err) {
+        return fail(err.message);
+      }
+
+      let next;
+      try {
+        next = revokePublisherKey({
+          previous: envelope.document ? envelope : { ...envelope, document: doc },
+          keyId,
+          signingKeyId: signWith,
+          signingKey,
+          publishedAt: nowStamp(),
+        });
+      } catch (err) {
+        return fail(err.message);
+      }
+
+      return emitDocument(next, 'revoked', flags, [
+        `revoked ${keyId}`,
+        `signed by ${signWith}`,
+        'historical releases stay valid; new ones signed by it are refused',
+      ]);
     }
 
     default:
       return fail(`unknown publisher subcommand: ${action ?? '(none)'}`);
   }
+}
+
+/** RFC 3339 UTC instant, used to stamp publisher transitions. */
+function nowStamp() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * Build a registry client from `--registry`.
+ *
+ * A URL gets the HTTP client; anything else is a local registry root. Returns
+ * null when no registry was named, which is how "verify this document offline"
+ * stays distinct from "discover this publisher from the network".
+ *
+ * The CLI does not know which backend it is talking to beyond this
+ * configuration: both implementations satisfy the same contract, so every command
+ * above works identically against either.
+ *
+ * @returns {Promise<object|null>} an initialized registry
+ */
+async function registryFromFlags(flags) {
+  const spec = typeof flags.registry === 'string' ? flags.registry : undefined;
+  if (!spec) return null;
+  if (/^https?:\/\//.test(spec)) return new HttpRegistryClient({ baseUrl: spec });
+  // LocalRegistry needs its storage directories created before use.
+  return new LocalRegistry({ root: spec }).init();
+}
+
+/**
+ * Build a trust policy from the local store.
+ *
+ * Never null. An empty policy is a valid policy that trusts nobody, and passing
+ * one explicitly is what stops an absent trust store from reading as "trust
+ * everything".
+ *
+ * @returns {Promise<object>}
+ */
+async function policyFromFlags(flags) {
+  return trustStoreFor(flags).policy();
+}
+
+/**
+ * Read the private key that authorizes a publisher lifecycle transition.
+ *
+ * Lifecycle operations must never accept a key from anywhere but an explicit
+ * file. A key passed as an argument would end up in shell history and process
+ * listings, which is not a place a long-lived publisher signing key belongs.
+ */
+async function readSigningKey(flags) {
+  const path = typeof flags['key-file'] === 'string' ? flags['key-file'] : undefined;
+  if (!path) {
+    throw new Error('--key-file <key.pem> is required: pass the private key authorizing this change');
+  }
+  try {
+    return createPrivateKey(await readFile(path, 'utf8'));
+  } catch (err) {
+    throw new Error(`cannot read private key from ${path}: ${err.message}`);
+  }
+}
+
+/**
+ * Write a signed publisher document, or print it.
+ *
+ * Every lifecycle command funnels through here so that no code path can emit an
+ * unsigned document by omission.
+ */
+function emitDocument(envelope, verb, flags, notes = []) {
+  if (typeof flags.out === 'string') {
+    // Documents are written synchronously by the caller via writeFile; this
+    // branch is replaced by the caller passing --out, so serialize here.
+    return emitDocumentAsync(envelope, verb, flags, notes);
+  }
+  process.stdout.write(`${JSON.stringify(envelope, null, 2)}\n`);
+  return 0;
+}
+
+async function emitDocumentAsync(envelope, verb, flags, notes) {
+  await writeFile(flags.out, `${JSON.stringify(envelope, null, 2)}\n`);
+  out(`${verb}  ${envelope.document.publisher.id}`);
+  out(`document -> ${flags.out}`);
+  out(`signed by ${envelope.signature.keyId}  sequence ${envelope.document.sequence}`);
+  for (const note of notes) out(`note     ${note}`);
+  return 0;
 }
 
 async function runKeygen(flags) {

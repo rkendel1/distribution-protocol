@@ -29,6 +29,14 @@ export const ErrorCode = Object.freeze({
   ARTIFACT_NOT_FOUND: 'ARTIFACT_NOT_FOUND',
   ARTIFACT_EXISTS: 'ARTIFACT_EXISTS',
   UNKNOWN_PUBLISHER_KEY: 'UNKNOWN_PUBLISHER_KEY',
+  // Publisher documents
+  INVALID_PUBLISHER_DOCUMENT: 'INVALID_PUBLISHER_DOCUMENT',
+  INVALID_PUBLISHER_SIGNATURE: 'INVALID_PUBLISHER_SIGNATURE',
+  PUBLISHER_CONFLICT: 'PUBLISHER_CONFLICT',
+  PUBLISHER_NOT_FOUND: 'PUBLISHER_NOT_FOUND',
+  KEY_REVOKED: 'KEY_REVOKED',
+  LAST_ACTIVE_KEY: 'LAST_ACTIVE_KEY',
+  CONFLICTING_PUBLISHER_DOCUMENT: 'CONFLICTING_PUBLISHER_DOCUMENT',
   // Resolution / acquisition / receipt
   RESOLUTION_FAILED: 'RESOLUTION_FAILED',
   ACQUISITION_FAILED: 'ACQUISITION_FAILED',
@@ -72,6 +80,8 @@ export const SignatureError = define('SignatureError', ErrorCode.INVALID_SIGNATU
 export const ReleaseConflictError = define('ReleaseConflictError', ErrorCode.RELEASE_CONFLICT);
 export const ArtifactNotFoundError = define('ArtifactNotFoundError', ErrorCode.ARTIFACT_NOT_FOUND);
 export const PublisherKeyError = define('PublisherKeyError', ErrorCode.UNKNOWN_PUBLISHER_KEY);
+export const PublisherConflictError = define('PublisherConflictError', ErrorCode.PUBLISHER_CONFLICT);
+export const PublisherNotFoundError = define('PublisherNotFoundError', ErrorCode.PUBLISHER_NOT_FOUND);
 export const ResolutionError = define('ResolutionError', ErrorCode.RESOLUTION_FAILED);
 export const AcquisitionError = define('AcquisitionError', ErrorCode.ACQUISITION_FAILED);
 export const DigestMismatchError = define('DigestMismatchError', ErrorCode.DIGEST_MISMATCH);

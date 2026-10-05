@@ -1,0 +1,938 @@
+{
+  "historical": [
+    {
+      "expected": {
+        "outcome": "VALID",
+        "sequence": 1
+      },
+      "lineage": [
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "active"
+              }
+            ],
+            "previousDocument": null,
+            "protocol": "distribution/1",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 1,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "idpIw5VgkLBin-Yfu-i-GdRSoUQHeSzg5yJ-AsZXzPU7GH9icXpAhZY0-0LePTT8r0NggwMNwgdiOnV9CmVPDQ"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "rotated"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-01-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 2,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "E2r3Ig3eTJFZ7LnOJU678r2ThLJ5pGF2Y_cb4Ur9LT_Xwaon1N2_iIzcjmS1E0LTSewCzjlBSWfhLpxbK08WCA"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "revoked"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:ba3241cc5b011429ffcaf36842259e83a9eae9913951d9c9f056c895e6dc4ee5",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-06-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 3,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:8f0MvFXTKDYPo6NjEUHnVpAhY-i6OBOQyvYo1PN3wfI",
+            "keyId": "key-2027",
+            "value": "nPHwmn5dSu9-ryKZIcN6kJBjEpGgLaGhoStTVP3RUm4cX1IwFE1yr_yrGZYcD7VoC76H1gDB_7W5U1QNBCj6Dw"
+          },
+          "type": "distribution/publisher"
+        }
+      ],
+      "name": "a release signed before revocation stays valid",
+      "release": {
+        "manifest": {
+          "artifacts": [
+            {
+              "digest": "sha256:26ef30bd291e18502859bf0e8050cbc70acdba103355279ab56755d17946003d",
+              "id": "widget-macos-arm64",
+              "mediaType": "application/octet-stream",
+              "size": 32,
+              "target": {
+                "arch": "arm64",
+                "os": "macos"
+              }
+            }
+          ],
+          "interfaces": [
+            {
+              "capabilities": [
+                "widget.execute"
+              ],
+              "id": "cli",
+              "type": "cli"
+            }
+          ],
+          "permissions": [],
+          "product": {
+            "id": "product://acme/widget",
+            "name": "Widget",
+            "version": "1.0.0"
+          },
+          "protocol": "distribution/1",
+          "publisher": {
+            "id": "publisher://acme"
+          },
+          "requirements": []
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+          "keyId": "key-2026",
+          "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+          "publisherDocument": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+          "value": "HTicaaaDBP4xce9t-upbExRHQU-kOvOWgLwUv5YvKZabJPQimOlEG9Y4JS_cob8SltQLc0M6yZwHSCEGJcjnDQ"
+        },
+        "type": "distribution/release"
+      },
+      "rule": "Historical validity: revocation does not retroactively invalidate releases"
+    },
+    {
+      "expected": {
+        "outcome": "KEY_REVOKED",
+        "sequence": 3
+      },
+      "lineage": [
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "active"
+              }
+            ],
+            "previousDocument": null,
+            "protocol": "distribution/1",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 1,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "idpIw5VgkLBin-Yfu-i-GdRSoUQHeSzg5yJ-AsZXzPU7GH9icXpAhZY0-0LePTT8r0NggwMNwgdiOnV9CmVPDQ"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "rotated"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-01-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 2,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "E2r3Ig3eTJFZ7LnOJU678r2ThLJ5pGF2Y_cb4Ur9LT_Xwaon1N2_iIzcjmS1E0LTSewCzjlBSWfhLpxbK08WCA"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "revoked"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:ba3241cc5b011429ffcaf36842259e83a9eae9913951d9c9f056c895e6dc4ee5",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-06-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 3,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:8f0MvFXTKDYPo6NjEUHnVpAhY-i6OBOQyvYo1PN3wfI",
+            "keyId": "key-2027",
+            "value": "nPHwmn5dSu9-ryKZIcN6kJBjEpGgLaGhoStTVP3RUm4cX1IwFE1yr_yrGZYcD7VoC76H1gDB_7W5U1QNBCj6Dw"
+          },
+          "type": "distribution/publisher"
+        }
+      ],
+      "name": "a release signed after revocation by that key is refused",
+      "release": {
+        "manifest": {
+          "artifacts": [
+            {
+              "digest": "sha256:26ef30bd291e18502859bf0e8050cbc70acdba103355279ab56755d17946003d",
+              "id": "widget-macos-arm64",
+              "mediaType": "application/octet-stream",
+              "size": 32,
+              "target": {
+                "arch": "arm64",
+                "os": "macos"
+              }
+            }
+          ],
+          "interfaces": [
+            {
+              "capabilities": [
+                "widget.execute"
+              ],
+              "id": "cli",
+              "type": "cli"
+            }
+          ],
+          "permissions": [],
+          "product": {
+            "id": "product://acme/widget",
+            "name": "Widget",
+            "version": "1.1.0"
+          },
+          "protocol": "distribution/1",
+          "publisher": {
+            "id": "publisher://acme"
+          },
+          "requirements": []
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+          "keyId": "key-2026",
+          "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+          "publisherDocument": "sha256:18996ffc6792679cbd1f2c6d6f16b36a85e0f8a1f27b4f786207a15f20ff3cb1",
+          "value": "N8xW_GY3J0jxbUlTWuRA5JHuzb8JkFv1nUtMG8UlfX0aLpbCfd6XWUI2XTJlEg4ZJK2Fg0jWMPXwPLZUEx8TAQ"
+        },
+        "type": "distribution/release"
+      },
+      "rule": "A revoked key may not authorize a new release"
+    },
+    {
+      "expected": {
+        "outcome": "UNKNOWN_PUBLISHER"
+      },
+      "lineage": [
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "active"
+              }
+            ],
+            "previousDocument": null,
+            "protocol": "distribution/1",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 1,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "idpIw5VgkLBin-Yfu-i-GdRSoUQHeSzg5yJ-AsZXzPU7GH9icXpAhZY0-0LePTT8r0NggwMNwgdiOnV9CmVPDQ"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "rotated"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-01-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 2,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "E2r3Ig3eTJFZ7LnOJU678r2ThLJ5pGF2Y_cb4Ur9LT_Xwaon1N2_iIzcjmS1E0LTSewCzjlBSWfhLpxbK08WCA"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "revoked"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:ba3241cc5b011429ffcaf36842259e83a9eae9913951d9c9f056c895e6dc4ee5",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-06-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 3,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:8f0MvFXTKDYPo6NjEUHnVpAhY-i6OBOQyvYo1PN3wfI",
+            "keyId": "key-2027",
+            "value": "nPHwmn5dSu9-ryKZIcN6kJBjEpGgLaGhoStTVP3RUm4cX1IwFE1yr_yrGZYcD7VoC76H1gDB_7W5U1QNBCj6Dw"
+          },
+          "type": "distribution/publisher"
+        }
+      ],
+      "name": "a release signed by an unknown key is refused",
+      "release": {
+        "manifest": {
+          "artifacts": [
+            {
+              "digest": "sha256:26ef30bd291e18502859bf0e8050cbc70acdba103355279ab56755d17946003d",
+              "id": "widget-macos-arm64",
+              "mediaType": "application/octet-stream",
+              "size": 32,
+              "target": {
+                "arch": "arm64",
+                "os": "macos"
+              }
+            }
+          ],
+          "interfaces": [
+            {
+              "capabilities": [
+                "widget.execute"
+              ],
+              "id": "cli",
+              "type": "cli"
+            }
+          ],
+          "permissions": [],
+          "product": {
+            "id": "product://acme/widget",
+            "name": "Widget",
+            "version": "9.9.9"
+          },
+          "protocol": "distribution/1",
+          "publisher": {
+            "id": "publisher://acme"
+          },
+          "requirements": []
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "keyId": "kSlG_NqE3m_-PAHK-81f3tUETvkk2WZK8tdiCpG9b81A",
+          "publicKey": "MCowBQYDK2VwAyEA-kYOc8QhHfF2LTmphajLgB9CY19bEri8wQdLp8kO4Lc",
+          "value": "KJVPXoNtlCmu2ALnscsdL_YPNzr6FSf7sdYn_TNP-5PY7kZkSNkw0cDGPHy6yOs4jrshUGAcDGe2ba1TliJtBw"
+        },
+        "type": "distribution/release"
+      },
+      "rule": "A key no publisher document declares cannot authorize a release"
+    },
+    {
+      "expected": {
+        "outcome": "VALID",
+        "sequence": 3
+      },
+      "lineage": [
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "active"
+              }
+            ],
+            "previousDocument": null,
+            "protocol": "distribution/1",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 1,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "idpIw5VgkLBin-Yfu-i-GdRSoUQHeSzg5yJ-AsZXzPU7GH9icXpAhZY0-0LePTT8r0NggwMNwgdiOnV9CmVPDQ"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "rotated"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-01-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 2,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "E2r3Ig3eTJFZ7LnOJU678r2ThLJ5pGF2Y_cb4Ur9LT_Xwaon1N2_iIzcjmS1E0LTSewCzjlBSWfhLpxbK08WCA"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "revoked"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:ba3241cc5b011429ffcaf36842259e83a9eae9913951d9c9f056c895e6dc4ee5",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-06-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 3,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:8f0MvFXTKDYPo6NjEUHnVpAhY-i6OBOQyvYo1PN3wfI",
+            "keyId": "key-2027",
+            "value": "nPHwmn5dSu9-ryKZIcN6kJBjEpGgLaGhoStTVP3RUm4cX1IwFE1yr_yrGZYcD7VoC76H1gDB_7W5U1QNBCj6Dw"
+          },
+          "type": "distribution/publisher"
+        }
+      ],
+      "name": "a release signed by the rotated-in key is valid",
+      "release": {
+        "manifest": {
+          "artifacts": [
+            {
+              "digest": "sha256:26ef30bd291e18502859bf0e8050cbc70acdba103355279ab56755d17946003d",
+              "id": "widget-macos-arm64",
+              "mediaType": "application/octet-stream",
+              "size": 32,
+              "target": {
+                "arch": "arm64",
+                "os": "macos"
+              }
+            }
+          ],
+          "interfaces": [
+            {
+              "capabilities": [
+                "widget.execute"
+              ],
+              "id": "cli",
+              "type": "cli"
+            }
+          ],
+          "permissions": [],
+          "product": {
+            "id": "product://acme/widget",
+            "name": "Widget",
+            "version": "1.2.0"
+          },
+          "protocol": "distribution/1",
+          "publisher": {
+            "id": "publisher://acme"
+          },
+          "requirements": []
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "keyFingerprint": "sha256:8f0MvFXTKDYPo6NjEUHnVpAhY-i6OBOQyvYo1PN3wfI",
+          "keyId": "key-2027",
+          "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+          "publisherDocument": "sha256:18996ffc6792679cbd1f2c6d6f16b36a85e0f8a1f27b4f786207a15f20ff3cb1",
+          "value": "0CwCtJdJ_Q31UuTG2Shs_79LIpWDWpjxeM52pcAj99NlwcLkCG_KymWq6MAcEGU97tiS01484d4-AIyTka3xBQ"
+        },
+        "type": "distribution/release"
+      },
+      "rule": "Rotation changes authorization without changing publisher identity"
+    }
+  ],
+  "vectors": [
+    {
+      "document": {
+        "keys": [
+          {
+            "algorithm": "ed25519",
+            "id": "key-2026",
+            "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+            "state": "revoked"
+          },
+          {
+            "algorithm": "ed25519",
+            "id": "key-2027",
+            "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+            "state": "active"
+          }
+        ],
+        "previousDocument": "sha256:ba3241cc5b011429ffcaf36842259e83a9eae9913951d9c9f056c895e6dc4ee5",
+        "protocol": "distribution/1",
+        "publishedAt": "2027-06-01T00:00:00Z",
+        "publisher": {
+          "id": "publisher://acme",
+          "name": "Acme"
+        },
+        "sequence": 3,
+        "type": "distribution/publisher"
+      },
+      "documentDigest": "sha256:18996ffc6792679cbd1f2c6d6f16b36a85e0f8a1f27b4f786207a15f20ff3cb1",
+      "documentId": "sha256:18996ffc6792679cbd1f2c6d6f16b36a85e0f8a1f27b4f786207a15f20ff3cb1",
+      "envelope": {
+        "document": {
+          "keys": [
+            {
+              "algorithm": "ed25519",
+              "id": "key-2026",
+              "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+              "state": "revoked"
+            },
+            {
+              "algorithm": "ed25519",
+              "id": "key-2027",
+              "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+              "state": "active"
+            }
+          ],
+          "previousDocument": "sha256:ba3241cc5b011429ffcaf36842259e83a9eae9913951d9c9f056c895e6dc4ee5",
+          "protocol": "distribution/1",
+          "publishedAt": "2027-06-01T00:00:00Z",
+          "publisher": {
+            "id": "publisher://acme",
+            "name": "Acme"
+          },
+          "sequence": 3,
+          "type": "distribution/publisher"
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "keyFingerprint": "sha256:8f0MvFXTKDYPo6NjEUHnVpAhY-i6OBOQyvYo1PN3wfI",
+          "keyId": "key-2027",
+          "value": "nPHwmn5dSu9-ryKZIcN6kJBjEpGgLaGhoStTVP3RUm4cX1IwFE1yr_yrGZYcD7VoC76H1gDB_7W5U1QNBCj6Dw"
+        },
+        "type": "distribution/publisher"
+      },
+      "expected": {
+        "documentSignatureValid": true,
+        "sequence": 3
+      },
+      "lineage": [
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "active"
+              }
+            ],
+            "previousDocument": null,
+            "protocol": "distribution/1",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 1,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "idpIw5VgkLBin-Yfu-i-GdRSoUQHeSzg5yJ-AsZXzPU7GH9icXpAhZY0-0LePTT8r0NggwMNwgdiOnV9CmVPDQ"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "rotated"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-01-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 2,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "E2r3Ig3eTJFZ7LnOJU678r2ThLJ5pGF2Y_cb4Ur9LT_Xwaon1N2_iIzcjmS1E0LTSewCzjlBSWfhLpxbK08WCA"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "revoked"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:ba3241cc5b011429ffcaf36842259e83a9eae9913951d9c9f056c895e6dc4ee5",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-06-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 3,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:8f0MvFXTKDYPo6NjEUHnVpAhY-i6OBOQyvYo1PN3wfI",
+            "keyId": "key-2027",
+            "value": "nPHwmn5dSu9-ryKZIcN6kJBjEpGgLaGhoStTVP3RUm4cX1IwFE1yr_yrGZYcD7VoC76H1gDB_7W5U1QNBCj6Dw"
+          },
+          "type": "distribution/publisher"
+        }
+      ],
+      "name": "revocation produces a signed successor",
+      "rule": "A revocation is signed by an authorized, non-revoked key"
+    },
+    {
+      "document": {
+        "keys": [
+          {
+            "algorithm": "ed25519",
+            "id": "key-2026",
+            "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+            "state": "revoked"
+          },
+          {
+            "algorithm": "ed25519",
+            "id": "key-2027",
+            "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+            "state": "active"
+          }
+        ],
+        "previousDocument": "sha256:ba3241cc5b011429ffcaf36842259e83a9eae9913951d9c9f056c895e6dc4ee5",
+        "protocol": "distribution/1",
+        "publishedAt": "2027-06-01T00:00:00Z",
+        "publisher": {
+          "id": "publisher://acme",
+          "name": "Acme"
+        },
+        "sequence": 3,
+        "type": "distribution/publisher"
+      },
+      "documentDigest": "sha256:18996ffc6792679cbd1f2c6d6f16b36a85e0f8a1f27b4f786207a15f20ff3cb1",
+      "documentId": "sha256:18996ffc6792679cbd1f2c6d6f16b36a85e0f8a1f27b4f786207a15f20ff3cb1",
+      "envelope": {
+        "document": {
+          "keys": [
+            {
+              "algorithm": "ed25519",
+              "id": "key-2026",
+              "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+              "state": "revoked"
+            },
+            {
+              "algorithm": "ed25519",
+              "id": "key-2027",
+              "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+              "state": "active"
+            }
+          ],
+          "previousDocument": "sha256:ba3241cc5b011429ffcaf36842259e83a9eae9913951d9c9f056c895e6dc4ee5",
+          "protocol": "distribution/1",
+          "publishedAt": "2027-06-01T00:00:00Z",
+          "publisher": {
+            "id": "publisher://acme",
+            "name": "Acme"
+          },
+          "sequence": 3,
+          "type": "distribution/publisher"
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "keyFingerprint": "sha256:8f0MvFXTKDYPo6NjEUHnVpAhY-i6OBOQyvYo1PN3wfI",
+          "keyId": "key-2027",
+          "value": "nPHwmn5dSu9-ryKZIcN6kJBjEpGgLaGhoStTVP3RUm4cX1IwFE1yr_yrGZYcD7VoC76H1gDB_7W5U1QNBCj6Dw"
+        },
+        "type": "distribution/publisher"
+      },
+      "expected": {
+        "keyStates": {
+          "key-2026": "revoked",
+          "key-2027": "active"
+        }
+      },
+      "lineage": [
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "active"
+              }
+            ],
+            "previousDocument": null,
+            "protocol": "distribution/1",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 1,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "idpIw5VgkLBin-Yfu-i-GdRSoUQHeSzg5yJ-AsZXzPU7GH9icXpAhZY0-0LePTT8r0NggwMNwgdiOnV9CmVPDQ"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "rotated"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-01-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 2,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+            "keyId": "key-2026",
+            "value": "E2r3Ig3eTJFZ7LnOJU678r2ThLJ5pGF2Y_cb4Ur9LT_Xwaon1N2_iIzcjmS1E0LTSewCzjlBSWfhLpxbK08WCA"
+          },
+          "type": "distribution/publisher"
+        },
+        {
+          "document": {
+            "keys": [
+              {
+                "algorithm": "ed25519",
+                "id": "key-2026",
+                "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+                "state": "revoked"
+              },
+              {
+                "algorithm": "ed25519",
+                "id": "key-2027",
+                "publicKey": "MCowBQYDK2VwAyEAgcwHqDH237cJZRn-RtwZ2Tu0RRBxSZ0F0fmvGbm6LjM",
+                "state": "active"
+              }
+            ],
+            "previousDocument": "sha256:ba3241cc5b011429ffcaf36842259e83a9eae9913951d9c9f056c895e6dc4ee5",
+            "protocol": "distribution/1",
+            "publishedAt": "2027-06-01T00:00:00Z",
+            "publisher": {
+              "id": "publisher://acme",
+              "name": "Acme"
+            },
+            "sequence": 3,
+            "type": "distribution/publisher"
+          },
+          "signature": {
+            "algorithm": "ed25519",
+            "keyFingerprint": "sha256:8f0MvFXTKDYPo6NjEUHnVpAhY-i6OBOQyvYo1PN3wfI",
+            "keyId": "key-2027",
+            "value": "nPHwmn5dSu9-ryKZIcN6kJBjEpGgLaGhoStTVP3RUm4cX1IwFE1yr_yrGZYcD7VoC76H1gDB_7W5U1QNBCj6Dw"
+          },
+          "type": "distribution/publisher"
+        }
+      ],
+      "name": "a revoked key is marked revoked in the successor",
+      "rule": "Revocation is recorded in the new document, never retroactively"
+    }
+  ],
+  "version": 1
+}

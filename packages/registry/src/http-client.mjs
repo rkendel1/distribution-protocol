@@ -15,6 +15,7 @@
 import { ProtocolError, ErrorCode } from '../../protocol/src/errors.mjs';
 import { verifyRelease } from '../../protocol/src/signing.mjs';
 import { resolveFromReleases } from '../../protocol/src/resolve.mjs';
+import { parsePublisherId } from '../../protocol/src/identifiers.mjs';
 
 /** Turn a non-2xx response into a ProtocolError carrying the server's code. */
 async function toError(res) {
@@ -107,6 +108,61 @@ export class HttpRegistryClient {
   }
 
   /**
+   * Publish a signed publisher document.
+   *
+   * This client adds NO trust semantics: it does not verify the document, decide
+   * whether the publisher is trusted, or re-sign anything. It stores evidence.
+   * Verification belongs to the protocol layer, the only place a consumer's
+   * policy can be applied.
+   *
+   * @param {object} envelope
+   * @returns {Promise<{created: boolean, documentId: string, sequence: number}>}
+   */
+  async publishPublisher(envelope) {
+    const publisherId = envelope?.document?.publisher?.id;
+    if (typeof publisherId !== 'string') {
+      throw new ProtocolError(ErrorCode.INVALID_PUBLISHER_DOCUMENT, 'document declares no publisher', {});
+    }
+    const res = await this.fetch(`${this.baseUrl}/v1/publishers/${encodeURIComponent(namespaceOf(publisherId))}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(envelope),
+    });
+    if (!res.ok) throw await toError(res);
+    return res.json();
+  }
+
+  /**
+   * Fetch the authoritative publisher document, or null when unknown.
+   *
+   * The signed envelope is preserved byte-for-byte: re-serializing it through a
+   * lossy transform would let a registry alter evidence without detection.
+   * Verification stays with the caller.
+   *
+   * @param {string} publisherId
+   */
+  async getPublisher(publisherId) {
+    const res = await this.fetch(`${this.baseUrl}/v1/publishers/${encodeURIComponent(namespaceOf(publisherId))}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw await toError(res);
+    return res.json();
+  }
+
+  /**
+   * Fetch the full document lineage, oldest first.
+   * @param {string} publisherId
+   */
+  async listPublisherDocuments(publisherId) {
+    const res = await this.fetch(
+      `${this.baseUrl}/v1/publishers/${encodeURIComponent(namespaceOf(publisherId))}/documents`,
+    );
+    if (res.status === 404) return [];
+    if (!res.ok) throw await toError(res);
+    const body = await res.json();
+    return body.documents ?? [];
+  }
+
+  /**
    * Artifact metadata by digest.
    * @param {string} digest
    */
@@ -149,4 +205,19 @@ function splitProduct(productId) {
     throw new ProtocolError(ErrorCode.INVALID_IDENTIFIER, `malformed product id ${productId}`, {});
   }
   return { namespace: withoutScheme.slice(0, slash), slug: withoutScheme.slice(slash + 1) };
+}
+
+/**
+ * Extract the canonical namespace from a publisher identifier.
+ *
+ * The path segment is derived from the protocol identity, never from anything
+ * registry-specific — which is what lets a publisher move between registries
+ * without its identity changing.
+ */
+function namespaceOf(publisherId) {
+  try {
+    return parsePublisherId(publisherId).namespace;
+  } catch {
+    throw new ProtocolError(ErrorCode.INVALID_IDENTIFIER, `malformed publisher id ${publisherId}`, {});
+  }
 }

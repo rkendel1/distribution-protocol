@@ -54,6 +54,52 @@ export function digestHex(digest) {
 }
 
 /**
+ * Validate artifact METADATA — the mutable record of how an artifact may be
+ * obtained.
+ *
+ * This is deliberately NOT part of the signed manifest. The release says which
+ * BYTES are authorized; this says where they might be fetched from. Keeping the
+ * two apart is what allows a registry to add a mirror, rotate a URL or move to
+ * a CDN without re-signing anything.
+ *
+ * @param {object} metadata
+ * @returns {string[]} validation errors (empty when valid)
+ */
+export function validateArtifactMetadata(metadata) {
+  const errors = [];
+  const push = (path, message) => errors.push(`${path}: ${message}`);
+
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return ['<root>: artifact metadata must be an object'];
+  }
+  if (!isDigest(metadata.digest)) push('digest', 'must be a well-formed sha256 digest');
+  if (metadata.size !== undefined) {
+    if (!Number.isInteger(metadata.size) || metadata.size < 0) {
+      push('size', 'must be a non-negative integer');
+    }
+  }
+  if (metadata.mediaType !== undefined && typeof metadata.mediaType !== 'string') {
+    push('mediaType', 'must be a string');
+  }
+
+  // Sources are locations. Their shape is checked, never their trustworthiness:
+  // a perfectly well-formed URL can still be an attacker's server.
+  if (metadata.sources !== undefined) {
+    if (!Array.isArray(metadata.sources)) {
+      push('sources', 'must be an array');
+    } else {
+      metadata.sources.forEach((source, index) => {
+        if (!source || typeof source.uri !== 'string' || source.uri.length === 0) {
+          push(`sources[${index}].uri`, 'must be a non-empty string');
+        }
+      });
+    }
+  }
+
+  return errors;
+}
+
+/**
  * Verify bytes against an expected digest.
  *
  * This is the ONLY place the protocol decides whether acquired bytes are the
@@ -61,7 +107,7 @@ export function digestHex(digest) {
  *
  * @param {Uint8Array|string} bytes
  * @param {string} expected
- * @returns {boolean} true when the bytes hash to `expected`
+ * @returns {boolean} true when the bytes hash to `expected
  */
 export function verifyBytes(bytes, expected) {
   if (!isDigest(expected)) {

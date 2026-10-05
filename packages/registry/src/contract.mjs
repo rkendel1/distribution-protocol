@@ -23,6 +23,23 @@
  *   Artifact metadata by content digest. The digest is the lookup key.
  * @property {(request: object) => Promise<object>} resolve
  *   Resolve a product/target/capability request to a release + artifact.
+ *
+ * Publisher documents are a REQUIRED part of the contract, not an optional
+ * capability. A registry that cannot distribute publisher documents cannot
+ * bootstrap a consumer's trust, which would make every consumer copy public
+ * keys by hand — exactly the workflow this protocol exists to remove.
+ *
+ * @typedef {object} Registry (cont.)
+ * @property {(document: object) => Promise<object>} publishPublisher
+ *   Accept a signed publisher document. MUST reject an invalid signature, and
+ *   MUST be immutable per document id: re-publishing byte-identical content is
+ *   idempotent, a different document at an existing sequence is an error.
+ *   MUST NOT re-sign the document — it stores evidence, verbatim.
+ * @property {(publisherId: string) => Promise<object|null>} getPublisher
+ *   The authoritative (highest sequence) publisher document, or null.
+ * @property {(publisherId: string) => Promise<object[]>} listPublisherDocuments
+ *   The full document lineage, oldest first. Required for historical
+ *   verification, so a registry that can only return "latest" is incomplete.
  */
 
 import { canonicalize } from '../../protocol/src/canonical.mjs';
@@ -38,10 +55,36 @@ export const REGISTRY_STATUS = Object.freeze({
   RELEASE_NOT_FOUND: 404,
   ARTIFACT_NOT_FOUND: 404,
   RELEASE_CONFLICT: 409,
+  PUBLISHER_CONFLICT: 409,
+  PUBLISHER_NOT_FOUND: 404,
   INVALID_SIGNATURE: 401,
   MANIFEST_VALIDATION_FAILED: 400,
   UNKNOWN_PUBLISHER_KEY: 403,
 });
+
+/**
+ * Assert an object implements the whole registry contract.
+ *
+ * Publisher support is checked as REQUIRED, with no feature detection: an
+ * incomplete registry must fail loudly here rather than be quietly tolerated
+ * and discovered later, at the point a consumer silently fails to verify.
+ *
+ * @param {object} candidate
+ * @returns {string[]} the names of missing methods (empty when conformant)
+ */
+export function missingRegistryMethods(candidate) {
+  const required = [
+    'publishRelease',
+    'getRelease',
+    'listReleases',
+    'getArtifact',
+    'resolve',
+    'publishPublisher',
+    'getPublisher',
+    'listPublisherDocuments',
+  ];
+  return required.filter((name) => typeof candidate?.[name] !== 'function');
+}
 
 /**
  * Confirms two release envelopes describe the same release.

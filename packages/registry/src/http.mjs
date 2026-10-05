@@ -7,6 +7,9 @@
  *   GET  /v1/releases/{product}/{version}   fetch one release
  *   GET  /v1/releases/{product}              list versions of a product
  *   GET  /v1/artifacts/{digest}              artifact metadata
+ *   PUT  /v1/publishers/{publisher}          publish a signed publisher document
+ *   GET  /v1/publishers/{publisher}          fetch the authoritative document
+ *   GET  /v1/publishers/{publisher}/documents list the full document lineage
  *   POST /v1/resolve                         resolve a request
  *
  * `{product}` is the percent-encoded `namespace/slug` pair, so a release id
@@ -21,15 +24,25 @@
 import { REGISTRY_STATUS } from './contract.mjs';
 import { ErrorCode, ProtocolError } from '../../protocol/src/errors.mjs';
 import { isDigest } from '../../protocol/src/artifact.mjs';
-import { parseProductId } from '../../protocol/src/identifiers.mjs';
+import { parseProductId, parsePublisherId } from '../../protocol/src/identifiers.mjs';
 
-/** Protocol error code -> HTTP status. */
+/**
+ * Protocol error code -> HTTP status.
+ *
+ * Publisher documents distinguish 400 (malformed) from 422 (well-formed but
+ * cryptographically invalid). That split matters to a publisher: 400 means
+ * "fix your JSON", 422 means "your key or document is wrong" — two very
+ * different problems.
+ */
 const STATUS_BY_CODE = {
   [ErrorCode.RELEASE_CONFLICT]: 409,
+  [ErrorCode.PUBLISHER_CONFLICT]: 409,
+  [ErrorCode.PUBLISHER_NOT_FOUND]: 404,
   [ErrorCode.INVALID_SIGNATURE]: 401,
   [ErrorCode.MANIFEST_VALIDATION_FAILED]: 400,
   [ErrorCode.UNKNOWN_PUBLISHER_KEY]: 403,
   [ErrorCode.INVALID_RELEASE]: 400,
+  [ErrorCode.INVALID_PUBLISHER_DOCUMENT]: 422,
   [ErrorCode.RELEASE_NOT_FOUND]: 404,
   [ErrorCode.ARTIFACT_NOT_FOUND]: 404,
   [ErrorCode.BAD_REQUEST]: 400,
@@ -99,6 +112,64 @@ export function createRegistryHandler(registry) {
           return;
         }
         sendJson(res, 200, meta);
+        return;
+      }
+
+      // --- /v1/publishers/{publisher}[/documents] ---------------------------
+      if (segments[0] === 'v1' && segments[1] === 'publishers' && segments[2]) {
+        const namespace = decodeURIComponent(segments[2]);
+        let publisher;
+        try {
+          publisher = parsePublisherId(`publisher://${namespace}`).namespace;
+        } catch {
+          sendJson(res, 400, { code: ErrorCode.BAD_REQUEST, message: `malformed publisher ${namespace}` });
+          return;
+        }
+
+        // PUT publishes. The server STORES the document verbatim and never
+        // re-signs it: a registry that re-signed would be asserting identity,
+        // which is precisely the authority the protocol denies it.
+        if (req.method === 'PUT') {
+          const envelope = await readJsonBody(req);
+
+          // The path and the document must agree. Otherwise one publisher could
+          // deposit a document under another's name.
+          const described = envelope?.document?.publisher?.id;
+          if (described !== `publisher://${publisher}`) {
+            sendJson(res, 400, {
+              code: ErrorCode.BAD_REQUEST,
+              message: `document describes ${described ?? '(none)'}, not publisher://${publisher}`,
+            });
+            return;
+          }
+
+          const result = await registry.publishPublisher(envelope);
+          sendJson(res, result.created ? 201 : 200, result);
+          return;
+        }
+
+        // GET the full lineage — required for historical verification.
+        if (req.method === 'GET' && segments[3] === 'documents') {
+          const documents = await registry.listPublisherDocuments(`publisher://${publisher}`);
+          sendJson(res, 200, { publisher: `publisher://${publisher}`, documents });
+          return;
+        }
+
+        // GET the authoritative document.
+        if (req.method === 'GET') {
+          const envelope = await registry.getPublisher(`publisher://${publisher}`);
+          if (!envelope) {
+            sendJson(res, 404, {
+              code: ErrorCode.PUBLISHER_NOT_FOUND,
+              message: `no publisher document for publisher://${publisher}`,
+            });
+            return;
+          }
+          sendJson(res, 200, envelope);
+          return;
+        }
+
+        sendJson(res, 405, { code: ErrorCode.BAD_REQUEST, message: `${req.method} not allowed here` });
         return;
       }
 

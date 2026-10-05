@@ -6,3 +6,6 @@ node_modules/
 *.pem
 *.pem.pub
 .registries/
+
+# Local trust state is per-user (~/.distribution) and never belongs in a repo.
+.distribution/

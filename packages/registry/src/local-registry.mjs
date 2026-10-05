@@ -25,12 +25,14 @@ import {
   ReleaseConflictError,
   ArtifactNotFoundError,
   PublisherKeyError,
+  PublisherConflictError,
   SignatureError,
 } from '../../protocol/src/errors.mjs';
 import { assertValidManifest, releaseIdOf } from '../../protocol/src/validate.mjs';
 import { verifyRelease, keyIdOf } from '../../protocol/src/signing.mjs';
+import { documentIdOf, verifyPublisherDocumentSignature } from '../../protocol/src/publisher.mjs';
 import { resolveFromReleases } from '../../protocol/src/resolve.mjs';
-import { parseProductId } from '../../protocol/src/identifiers.mjs';
+import { parseProductId, parsePublisherId } from '../../protocol/src/identifiers.mjs';
 import { digestHex, digestOfBytes, isDigest } from '../../protocol/src/artifact.mjs';
 import { canonicalize } from '../../protocol/src/canonical.mjs';
 import { orderReleases } from './contract.mjs';
@@ -46,6 +48,7 @@ export class LocalRegistry {
     this.root = root;
     this.releasesDir = path.join(root, 'releases');
     this.artifactsDir = path.join(root, 'artifacts');
+    this.publishersDir = path.join(root, 'publishers');
     this.publisherKeys = publisherKeys ? new Map(Object.entries(publisherKeys)) : null;
   }
 
@@ -53,7 +56,106 @@ export class LocalRegistry {
   async init() {
     await mkdir(this.releasesDir, { recursive: true });
     await mkdir(this.artifactsDir, { recursive: true });
+    await mkdir(this.publishersDir, { recursive: true });
     return this;
+  }
+
+  /**
+   * Directory for a publisher's documents.
+   *
+   * The key is the canonical protocol NAMESPACE (`acme`), never the display
+   * name — `Acme`, `Acme Corp` and `ACME!` all normalize to the same directory,
+   * so renaming a publisher cannot fork or orphan their identity.
+   */
+  #publisherDir(publisherId) {
+    const { namespace } = parsePublisherId(publisherId);
+    return path.join(this.publishersDir, namespace);
+  }
+
+  /**
+   * Publish a signed publisher document.
+   *
+   * Immutability is enforced with `wx` (exclusive create) rather than a
+   * read-then-write check, so two concurrent publishers of the same document
+   * cannot clobber one another.
+   *
+   * @param {object} envelope
+   * @returns {Promise<{created: boolean, documentId: string, sequence: number}>}
+   */
+  async publishPublisher(envelope) {
+    const check = verifyPublisherDocumentSignature(envelope);
+    if (!check.valid) {
+      throw new SignatureError(`refusing to publish publisher document: ${check.reason}`, {
+        reason: check.reason,
+      });
+    }
+
+    const publisherIdValue = envelope.document.publisher.id;
+    const documentId = documentIdOf(envelope.document);
+    const sequence = envelope.document.sequence ?? 1;
+    const dir = this.#publisherDir(publisherIdValue);
+    const file = path.join(dir, `${documentId}.json`);
+
+    // Reject a competing document at the same sequence BEFORE writing, so a
+    // fork is refused rather than stored and detected later.
+    for (const stored of await this.listPublisherDocuments(publisherIdValue)) {
+      if ((stored.document.sequence ?? 1) === sequence && documentIdOf(stored.document) !== documentId) {
+        throw new PublisherConflictError(
+          `publisher ${publisherIdValue} already has a different document at sequence ${sequence}`,
+          { publisher: publisherIdValue, sequence, documentId },
+        );
+      }
+    }
+
+    await mkdir(dir, { recursive: true });
+    const created = await writeFile(file, `${JSON.stringify(envelope, null, 2)}\n`, { flag: 'wx' })
+      .then(() => true)
+      .catch((err) => {
+        // Already present: identical content is idempotent, not a conflict.
+        if (err.code === 'EEXIST') return false;
+        throw err;
+      });
+
+    return { created, documentId, sequence };
+  }
+
+  /**
+   * The authoritative (highest sequence) document for a publisher.
+   * @param {string} publisherId
+   */
+  async getPublisher(publisherId) {
+    const documents = await this.listPublisherDocuments(publisherId);
+    if (documents.length === 0) return null;
+    return documents.reduce((latest, doc) =>
+      (doc.document.sequence ?? 1) > (latest.document.sequence ?? 1) ? doc : latest,
+    );
+  }
+
+  /**
+   * The full document lineage, oldest first.
+   * @param {string} publisherId
+   */
+  async listPublisherDocuments(publisherId) {
+    let dir;
+    try {
+      dir = this.#publisherDir(publisherId);
+    } catch {
+      // A malformed identifier simply has no documents; it is not an error.
+      return [];
+    }
+    let entries;
+    try {
+      entries = await readdir(dir);
+    } catch (err) {
+      if (err.code === 'ENOENT') return [];
+      throw err;
+    }
+    const documents = [];
+    for (const entry of entries) {
+      if (!entry.endsWith('.json')) continue;
+      documents.push(JSON.parse(await readFile(path.join(dir, entry), 'utf8')));
+    }
+    return documents.sort((a, b) => (a.document.sequence ?? 1) - (b.document.sequence ?? 1));
   }
 
   /** @param {object} publicKey @returns {string} key id */

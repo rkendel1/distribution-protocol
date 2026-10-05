@@ -20,13 +20,16 @@ import {
   ReleaseConflictError,
   ArtifactNotFoundError,
   PublisherKeyError,
+  PublisherConflictError,
   SignatureError,
 } from '../../protocol/src/errors.mjs';
 import { assertValidManifest, releaseIdOf } from '../../protocol/src/validate.mjs';
 import { verifyRelease, keyIdOf } from '../../protocol/src/signing.mjs';
+import { documentIdOf, verifyPublisherDocumentSignature } from '../../protocol/src/publisher.mjs';
 import { resolveFromReleases } from '../../protocol/src/resolve.mjs';
 import { productIdOf, parseProductId } from '../../protocol/src/identifiers.mjs';
-import { digestOfBytes, isDigest } from '../../protocol/src/artifact.mjs';
+import { digestOfBytes, isDigest, validateArtifactMetadata } from '../../protocol/src/artifact.mjs';
+import { ProtocolError } from '../../protocol/src/errors.mjs';
 import { orderReleases, isSameRelease } from './contract.mjs';
 
 export class MemoryRegistry {
@@ -45,7 +48,82 @@ export class MemoryRegistry {
     this.artifacts = new Map();
     /** @type {Map<string, Uint8Array>} digest -> bytes */
     this.blobs = new Map();
+    /** @type {Map<string, Map<string, object>>} publisherId -> documentId -> envelope */
+    this.publishers = new Map();
     this.publisherKeys = publisherKeys ? new Map(Object.entries(publisherKeys)) : null;
+  }
+
+  /**
+   * Publish a signed publisher document.
+   *
+   * Publisher documents are immutable, exactly like releases. The same
+   * immutability rule applies for the same reason: a registry that could
+   * silently swap one document for another would be editing a publisher's
+   * identity history, which is precisely the authority the protocol denies it.
+   *
+   * @param {object} envelope a signed publisher document
+   * @returns {Promise<{created: boolean, documentId: string, sequence: number}>}
+   * @throws {SignatureError|PublisherConflictError}
+   */
+  async publishPublisher(envelope) {
+    const check = verifyPublisherDocumentSignature(envelope);
+    if (!check.valid) {
+      throw new SignatureError(`refusing to publish publisher document: ${check.reason}`, {
+        reason: check.reason,
+      });
+    }
+
+    const publisherId = envelope.document.publisher.id;
+    const documentId = documentIdOf(envelope.document);
+    const documents = this.publishers.get(publisherId) ?? new Map();
+
+    const existing = documents.get(documentId);
+    if (existing) {
+      // Re-publishing byte-identical content is idempotent, not a conflict.
+      return { created: false, documentId, sequence: envelope.document.sequence ?? 1 };
+    }
+
+    // A document claiming the same sequence as a different document would make
+    // the lineage ambiguous, so it is refused rather than stored.
+    const sequence = envelope.document.sequence ?? 1;
+    for (const [otherId, other] of documents) {
+      if ((other.document.sequence ?? 1) === sequence && otherId !== documentId) {
+        throw new PublisherConflictError(
+          `publisher ${publisherId} already has a different document at sequence ${sequence}`,
+          { publisher: publisherId, sequence, documentId },
+        );
+      }
+    }
+
+    documents.set(documentId, envelope);
+    this.publishers.set(publisherId, documents);
+    return { created: true, documentId, sequence };
+  }
+
+  /**
+   * The authoritative (highest sequence) document for a publisher.
+   *
+   * @param {string} publisherId
+   * @returns {Promise<object|null>}
+   */
+  async getPublisher(publisherId) {
+    const documents = [...(this.publishers.get(publisherId)?.values() ?? [])];
+    if (documents.length === 0) return null;
+    return documents.reduce((latest, doc) =>
+      (doc.document.sequence ?? 1) > (latest.document.sequence ?? 1) ? doc : latest,
+    );
+  }
+
+  /**
+   * The full document lineage, oldest first.
+   *
+   * @param {string} publisherId
+   * @returns {Promise<object[]>}
+   */
+  async listPublisherDocuments(publisherId) {
+    return [...(this.publishers.get(publisherId)?.values() ?? [])].sort(
+      (a, b) => (a.document.sequence ?? 1) - (b.document.sequence ?? 1),
+    );
   }
 
   /**
@@ -109,16 +187,42 @@ export class MemoryRegistry {
   }
 
   /** Record artifact metadata so `getArtifact` can serve it. */
-  #indexArtifacts(release) {
+  #indexArtifacts(release, sources = []) {
     for (const artifact of release.manifest.artifacts ?? []) {
       if (this.artifacts.has(artifact.digest)) continue;
+      // `sources` are LOCATIONS and deliberately live outside the signed
+      // manifest: a registry may add or rotate them without invalidating any
+      // signature, and a consumer must still verify the digest either way.
       this.artifacts.set(artifact.digest, {
         digest: artifact.digest,
         size: artifact.size ?? null,
         mediaType: artifact.mediaType ?? null,
         releaseId: releaseIdOf(release.manifest),
+        sources: [...sources],
       });
     }
+  }
+
+  /**
+   * Record artifact metadata independently of any release.
+   *
+   * @param {object} metadata `{digest, size?, mediaType?, sources?}`
+   */
+  putArtifactMetadata(metadata) {
+    const errors = validateArtifactMetadata(metadata);
+    if (errors.length > 0) {
+      throw new ProtocolError('INVALID_ARTIFACT_METADATA', `invalid artifact metadata: ${errors.join('; ')}`, {
+        errors,
+      });
+    }
+    const existing = this.artifacts.get(metadata.digest);
+    this.artifacts.set(metadata.digest, {
+      ...existing,
+      ...metadata,
+      size: metadata.size ?? existing?.size ?? null,
+      mediaType: metadata.mediaType ?? existing?.mediaType ?? null,
+    });
+    return this.artifacts.get(metadata.digest);
   }
 
   /**

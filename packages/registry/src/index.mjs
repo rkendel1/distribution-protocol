@@ -14,4 +14,14 @@ export { MemoryRegistry } from './memory-registry.mjs';
 export { LocalRegistry } from './local-registry.mjs';
 export { HttpRegistryClient } from './http-client.mjs';
 export { createRegistryHandler, STATUS_BY_CODE } from './http.mjs';
-export { REGISTRY_STATUS, isSameRelease, sortReleasesForListing, orderReleases } from './contract.mjs';
+export {
+  REGISTRY_STATUS,
+  isSameRelease,
+  sortReleasesForListing,
+  orderReleases,
+  missingRegistryMethods,
+} from './contract.mjs';
+
+// The publisher conformance suite, so any implementation (or a third party)
+// can be held to the same bar.
+export { publisherRegistrySuite } from './publisher-suite.mjs';

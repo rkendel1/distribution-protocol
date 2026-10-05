@@ -17,15 +17,29 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createPublicKey } from 'node:crypto';
+import os from 'node:os';
 import path from 'node:path';
 
 import { createTrustPolicy } from '../../protocol/src/trust.mjs';
-import { exportPublicKey, importPublicKey, keyFingerprint } from '../../protocol/src/publisher.mjs';
+import { exportPublicKey, importPublicKey, keyFingerprint, documentIdOf } from '../../protocol/src/publisher.mjs';
 import { isPublisherId, normalizeIdentifier } from '../../protocol/src/identifiers.mjs';
 import { ProtocolError } from '../../protocol/src/errors.mjs';
 
-/** Where a consumer's trust state lives when not overridden. */
-export const DEFAULT_TRUST_PATH = path.join('.distribution', 'trust.json');
+/**
+ * Where a consumer's trust state lives when not overridden.
+ *
+ * This is per-USER, not per-directory, on purpose. Trust anchors are a security
+ * decision — "I choose to believe this publisher" — so they belong to the person
+ * who made that decision, not to whichever checkout happens to be current. A
+ * per-directory store would also mean a test run silently rewrote a developer's
+ * real trust anchors, and that a repo could ship trust state to whoever cloned
+ * it.
+ *
+ * Override with `--trust-store <path>`.
+ */
+export const DEFAULT_TRUST_PATH =
+  process.env.DISTRIBUTION_TRUST_STORE ??
+  path.join(os.homedir(), '.distribution', 'trust.json');
 
 /**
  * Decode public key material supplied as either PEM text or the protocol's
@@ -79,7 +93,7 @@ export function createTrustStore({ path: storePath = DEFAULT_TRUST_PATH } = {}) 
       text = await readFile(file, 'utf8');
     } catch (err) {
       // A missing trust file is the normal first-run state, not an error.
-      if (err.code === 'ENOENT') return { publishers: [], keys: {} };
+      if (err.code === 'ENOENT') return { publishers: [], keys: {}, documents: {} };
       throw err;
     }
     let parsed;
@@ -110,8 +124,24 @@ export function createTrustStore({ path: storePath = DEFAULT_TRUST_PATH } = {}) 
     return createTrustPolicy(state);
   }
 
-  /** Trust a publisher by identity, optionally pinning one of its keys. */
-  async function addPublisher(publisherId, { keyId, publicKey } = {}) {
+  /**
+   * Trust a publisher by identity, optionally pinning keys or anchoring to a
+   * signed publisher document.
+   *
+   * Three distinct things can be recorded, and the distinction is deliberate:
+   *
+   *   publisher    "I trust this identity"          — survives key rotation
+   *   keys         "I trust these exact keys"       — narrow, deliberate pin
+   *   documents    "this document anchored my trust" — audit trail of why
+   *
+   * A publisher entry with no key pins is publisher-level trust: rotation
+   * becomes transparent. A key pin is the consumer explicitly narrowing what
+   * they accept, and is honoured as such.
+   *
+   * @param {string} publisherId
+   * @param {{keyId?: string, publicKey?: string|object, document?: object}} [options]
+   */
+  async function addPublisher(publisherId, { keyId, publicKey, document } = {}) {
     const id = normalizeIdentifier(publisherId);
     if (!isPublisherId(id)) {
       throw new ProtocolError('INVALID_IDENTIFIER', `malformed publisher identifier ${publisherId}`, {
@@ -119,7 +149,20 @@ export function createTrustStore({ path: storePath = DEFAULT_TRUST_PATH } = {}) 
       });
     }
     const state = await load();
+    state.documents ??= {};
     if (!state.publishers.includes(id)) state.publishers.push(id);
+
+    if (document) {
+      // Record WHICH document was the anchor, for the audit trail. The keys it
+      // declares are NOT pinned: trusting the document is not the same as
+      // trusting the specific keys it happens to contain right now.
+      const documentId = documentIdOf(document.document ?? document);
+      state.documents[id] = [
+        ...(state.documents[id] ?? []).filter((d) => d.documentId !== documentId),
+        { documentId, sequence: (document.document ?? document).sequence ?? 1 },
+      ];
+    }
+
     if (keyId) {
       // Store only PUBLIC material. A private key passed here is rejected
       // outright rather than being quietly written to disk — trust state

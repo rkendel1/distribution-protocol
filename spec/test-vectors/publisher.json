@@ -1,0 +1,221 @@
+{
+  "vectors": [
+    {
+      "document": {
+        "keys": [
+          {
+            "algorithm": "ed25519",
+            "id": "key-2026",
+            "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+            "state": "active"
+          }
+        ],
+        "previousDocument": null,
+        "protocol": "distribution/1",
+        "publisher": {
+          "id": "publisher://acme",
+          "name": "Acme"
+        },
+        "sequence": 1,
+        "type": "distribution/publisher"
+      },
+      "documentDigest": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+      "documentId": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+      "envelope": {
+        "document": {
+          "keys": [
+            {
+              "algorithm": "ed25519",
+              "id": "key-2026",
+              "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+              "state": "active"
+            }
+          ],
+          "previousDocument": null,
+          "protocol": "distribution/1",
+          "publisher": {
+            "id": "publisher://acme",
+            "name": "Acme"
+          },
+          "sequence": 1,
+          "type": "distribution/publisher"
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+          "keyId": "key-2026",
+          "value": "idpIw5VgkLBin-Yfu-i-GdRSoUQHeSzg5yJ-AsZXzPU7GH9icXpAhZY0-0LePTT8r0NggwMNwgdiOnV9CmVPDQ"
+        },
+        "type": "distribution/publisher"
+      },
+      "expected": {
+        "documentSignatureValid": true
+      },
+      "name": "a signed publisher document verifies",
+      "rule": "A publisher document is valid when signed by a key it declares"
+    },
+    {
+      "document": {
+        "keys": [
+          {
+            "algorithm": "ed25519",
+            "id": "key-2026",
+            "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+            "state": "active"
+          }
+        ],
+        "previousDocument": null,
+        "protocol": "distribution/1",
+        "publisher": {
+          "id": "publisher://acme",
+          "name": "Impostor"
+        },
+        "sequence": 1,
+        "type": "distribution/publisher"
+      },
+      "documentDigest": "sha256:20ffb37230e65941d032097e1c48e9578e2da57991207b31839fb087aace1bb8",
+      "documentId": "sha256:20ffb37230e65941d032097e1c48e9578e2da57991207b31839fb087aace1bb8",
+      "envelope": {
+        "document": {
+          "keys": [
+            {
+              "algorithm": "ed25519",
+              "id": "key-2026",
+              "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+              "state": "active"
+            }
+          ],
+          "previousDocument": null,
+          "protocol": "distribution/1",
+          "publisher": {
+            "id": "publisher://acme",
+            "name": "Impostor"
+          },
+          "sequence": 1,
+          "type": "distribution/publisher"
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+          "keyId": "key-2026",
+          "value": "idpIw5VgkLBin-Yfu-i-GdRSoUQHeSzg5yJ-AsZXzPU7GH9icXpAhZY0-0LePTT8r0NggwMNwgdiOnV9CmVPDQ"
+        },
+        "type": "distribution/publisher"
+      },
+      "expected": {
+        "documentSignatureValid": false
+      },
+      "name": "a modified publisher document fails",
+      "rule": "Any change to the document invalidates its signature"
+    },
+    {
+      "document": {
+        "keys": [
+          {
+            "algorithm": "ed25519",
+            "id": "key-2026",
+            "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+            "state": "active"
+          }
+        ],
+        "previousDocument": null,
+        "protocol": "distribution/1",
+        "publisher": {
+          "id": "publisher://evil",
+          "name": "Acme"
+        },
+        "sequence": 1,
+        "type": "distribution/publisher"
+      },
+      "documentDigest": "sha256:c06c803b2c89b1b9e012e2db511cb665cf116d27e636995976ef71eb5094edde",
+      "documentId": "sha256:c06c803b2c89b1b9e012e2db511cb665cf116d27e636995976ef71eb5094edde",
+      "envelope": {
+        "document": {
+          "keys": [
+            {
+              "algorithm": "ed25519",
+              "id": "key-2026",
+              "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+              "state": "active"
+            }
+          ],
+          "previousDocument": null,
+          "protocol": "distribution/1",
+          "publisher": {
+            "id": "publisher://evil",
+            "name": "Acme"
+          },
+          "sequence": 1,
+          "type": "distribution/publisher"
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "keyFingerprint": "sha256:PjTtB45Bb5QfKiT-hdGxKG_E79ycVdLwflWlBRsibHg",
+          "keyId": "key-2026",
+          "value": "TQfxsprXNhHfKIoNMUx1e6QK5BI0NOAaOP5EHaFTeascmbgc1I13jpHE69bOFN_BMn94-kXhiP7yC5z_0mtmAQ"
+        },
+        "type": "distribution/publisher"
+      },
+      "expected": {
+        "documentSignatureValid": true
+      },
+      "name": "a document for another publisher is an identity mismatch",
+      "rule": "A genuine document must describe the publisher it is served for"
+    },
+    {
+      "document": {
+        "keys": [
+          {
+            "algorithm": "ed25519",
+            "id": "key-2026",
+            "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+            "state": "active"
+          }
+        ],
+        "previousDocument": null,
+        "protocol": "distribution/1",
+        "publisher": {
+          "id": "publisher://acme",
+          "name": "Acme"
+        },
+        "sequence": 1,
+        "type": "distribution/publisher"
+      },
+      "documentDigest": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+      "documentId": "sha256:9cce1d631b46a54ccd458d61f62a46be93d0d8676d1b1a8241ee97cbfb730404",
+      "envelope": {
+        "document": {
+          "keys": [
+            {
+              "algorithm": "ed25519",
+              "id": "key-2026",
+              "publicKey": "MCowBQYDK2VwAyEA_SszuhFmi7HYBajhR65pK_yWdpqC4-YVucYOH88ZgHA",
+              "state": "active"
+            }
+          ],
+          "previousDocument": null,
+          "protocol": "distribution/1",
+          "publisher": {
+            "id": "publisher://acme",
+            "name": "Acme"
+          },
+          "sequence": 1,
+          "type": "distribution/publisher"
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "keyFingerprint": "sha256:SlG_NqE3m_-PAHK-81f3tUETvkk2WZK8tdiCpG9b81A",
+          "keyId": undefined,
+          "value": "7Gq92QCJqPosyK1XSKSCg_v9mRcvnhHDVmKJxasDzHFyvZ8IGkYss43nf_RPFxw-Flmcj47dHZww0K5UQ4m7Bg"
+        },
+        "type": "distribution/publisher"
+      },
+      "expected": {
+        "documentSignatureValid": false
+      },
+      "name": "a document signed by an undeclared key fails",
+      "rule": "The signing key must be declared by the document it signs"
+    }
+  ],
+  "version": 1
+}

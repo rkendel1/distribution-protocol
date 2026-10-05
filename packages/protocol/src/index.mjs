@@ -110,6 +110,11 @@ export {
   validatePublisherDocument,
   findKey,
   keyStateAt,
+  documentIdOf,
+  isDocumentId,
+  transitionPublisherDocument,
+  rotatePublisherKey,
+  revokePublisherKey,
 } from './publisher.mjs';
 
 // Trust
@@ -122,7 +127,16 @@ export {
   verifyPublisherDocument,
   allowNewRelease,
   discoverPublisherDocument,
+  verifyPublisherAt,
+  verifyPublisherLineage,
 } from './trust.mjs';
+
+// Publisher discovery
+export {
+  resolvePublisher,
+  verifyDiscoveredPublisher,
+  discoverPublisher,
+} from './discovery.mjs';
 
 // Resolution
 export {
@@ -135,8 +149,30 @@ export {
   resolveFromReleases,
 } from './resolve.mjs';
 
-// Acquisition
-export { acquire, fetchers, verifyArtifactBytes } from './acquire.mjs';
+// Acquisition — the streaming, digest-verified artifact path.
+export {
+  AcquisitionOutcome,
+  acquire,
+  acquireArtifact,
+  acquireFromSource,
+  assertArtifact,
+  defaultTransports,
+  selectSource,
+  verifyArtifact,
+  verifyArtifactBytes,
+} from './acquire.mjs';
+
+// Artifact transports and the content-addressed cache.
+export {
+  PermanentTransportError,
+  TransportError,
+  TransportRegistry,
+  asTransportError,
+  schemeOf,
+} from './transport.mjs';
+export { fileTransport, resolveFileUri } from './transport-file.mjs';
+export { httpsTransport } from './transport-https.mjs';
+export { ArtifactCache, hashBytes, hashStream } from './cache.mjs';
 
 // Receipts
 export { RECEIPT_TYPE, createReceipt, receiptFromAcquisition, validateReceipt } from './receipt.mjs';
