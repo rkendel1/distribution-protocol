@@ -7,6 +7,8 @@
  *   GET  /v1/releases/{product}/{version}   fetch one release
  *   GET  /v1/releases/{product}              list versions of a product
  *   GET  /v1/artifacts/{digest}              artifact metadata
+ *   PUT  /v1/artifacts/{digest}/content      upload bytes (verified against the digest)
+ *   GET  /v1/artifacts/{digest}/content      download bytes (also HEAD)
  *   PUT  /v1/publishers/{publisher}          publish a signed publisher document
  *   GET  /v1/publishers/{publisher}          fetch the authoritative document
  *   GET  /v1/publishers/{publisher}/documents list the full document lineage
@@ -21,7 +23,10 @@
  * never parse prose.
  */
 
-import { REGISTRY_STATUS } from './contract.mjs';
+import { pipeline } from 'node:stream/promises';
+
+import { REGISTRY_STATUS, supportsArtifactContent } from './contract.mjs';
+import { DEFAULT_MAX_ARTIFACT_BYTES, artifactTooLarge } from './artifact-store.mjs';
 import { ErrorCode, ProtocolError } from '../../protocol/src/errors.mjs';
 import { isDigest } from '../../protocol/src/artifact.mjs';
 import { parseProductId, parsePublisherId } from '../../protocol/src/identifiers.mjs';
@@ -46,16 +51,86 @@ const STATUS_BY_CODE = {
   [ErrorCode.RELEASE_NOT_FOUND]: 404,
   [ErrorCode.ARTIFACT_NOT_FOUND]: 404,
   [ErrorCode.BAD_REQUEST]: 400,
+  [ErrorCode.DIGEST_MISMATCH]: 422,
+  [ErrorCode.ARTIFACT_TOO_LARGE]: 413,
+  [ErrorCode.ARTIFACT_STORAGE_UNSUPPORTED]: 501,
 };
 
-/** @param {number} status @param {object} body */
-function sendJson(res, status, body) {
+/** @param {number} status @param {object} body @param {object} [headers] */
+function sendJson(res, status, body, headers = {}) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(payload),
+    ...headers,
   });
   res.end(payload);
+}
+
+/**
+ * Serve `/v1/artifacts/{digest}/content`.
+ *
+ * Bytes are addressed ONLY by digest. The registry hashes what it receives and
+ * refuses a mismatch, but that protects its own storage; it says nothing about
+ * authenticity. Clients re-hash what they download and check the digest against
+ * the publisher-signed release, so a registry that serves wrong bytes here is
+ * caught on the client, not trusted.
+ */
+async function handleArtifactContent(registry, req, res, digest, { maxArtifactBytes }) {
+  if (!supportsArtifactContent(registry)) {
+    sendJson(res, 501, {
+      code: ErrorCode.ARTIFACT_STORAGE_UNSUPPORTED,
+      message: 'this registry does not store artifact bytes',
+    });
+    return;
+  }
+
+  if (req.method === 'PUT') {
+    // Refuse early on a declared size so an oversize body is never read; the
+    // streaming limit in the registry still covers chunked uploads that declare
+    // nothing. `connection: close` because the unread body makes the socket
+    // unusable for another request.
+    const declared = req.headers['content-length'];
+    if (declared !== undefined && Number(declared) > maxArtifactBytes) {
+      const err = artifactTooLarge(maxArtifactBytes, { declared: Number(declared) });
+      sendJson(res, 413, { code: err.code, message: err.message }, { connection: 'close' });
+      return;
+    }
+    const result = await registry.putArtifactStream(digest, req, { maxSize: maxArtifactBytes });
+    sendJson(res, result.created ? 201 : 200, result);
+    return;
+  }
+
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    let artifact;
+    try {
+      artifact = await registry.openArtifact(digest);
+    } catch (err) {
+      if (err?.code === ErrorCode.ARTIFACT_NOT_FOUND) {
+        sendJson(res, 404, { code: ErrorCode.ARTIFACT_NOT_FOUND, message: `no artifact bytes for ${digest}` });
+        return;
+      }
+      throw err;
+    }
+    res.writeHead(200, {
+      'content-type': 'application/octet-stream',
+      ...(artifact.size != null ? { 'content-length': artifact.size } : {}),
+      // The digest never changes meaning, so the response is cacheable forever.
+      etag: `"${digest}"`,
+      'cache-control': 'public, max-age=31536000, immutable',
+    });
+    if (req.method === 'HEAD') {
+      artifact.stream.destroy?.();
+      res.end();
+      return;
+    }
+    // A failure mid-stream destroys the response: a truncated body must look
+    // truncated to the client, never like a complete (wrong) artifact.
+    await pipeline(artifact.stream, res).catch(() => {});
+    return;
+  }
+
+  sendJson(res, 405, { code: ErrorCode.BAD_REQUEST, message: `${req.method} not allowed here` }, { allow: 'GET, HEAD, PUT' });
 }
 
 /** Read and parse a JSON request body, with a size limit. */
@@ -83,9 +158,11 @@ async function readJsonBody(req, { limit = 8 * 1024 * 1024 } = {}) {
  * module stays free of server specifics so the mapping itself is testable.
  *
  * @param {object} registry anything implementing the registry contract
+ * @param {object} [options]
+ * @param {number} [options.maxArtifactBytes] ceiling for one artifact upload
  * @returns {(req: object, res: object) => Promise<void>}
  */
-export function createRegistryHandler(registry) {
+export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX_ARTIFACT_BYTES } = {}) {
   return async function handle(req, res) {
     try {
       const url = new URL(req.url, 'http://registry.invalid');
@@ -104,6 +181,10 @@ export function createRegistryHandler(registry) {
         const digest = decodeURIComponent(segments[2]);
         if (!isDigest(digest)) {
           sendJson(res, 400, { code: ErrorCode.BAD_REQUEST, message: `malformed digest ${digest}` });
+          return;
+        }
+        if (segments[3] === 'content') {
+          await handleArtifactContent(registry, req, res, digest, { maxArtifactBytes });
           return;
         }
         const meta = await registry.getArtifact(digest);
@@ -214,8 +295,20 @@ export function createRegistryHandler(registry) {
 
       sendJson(res, 404, { code: 'NOT_FOUND', message: `no route for ${req.method} ${url.pathname}` });
     } catch (err) {
+      // An upload the client abandoned has nobody left to answer.
+      if (res.headersSent || res.destroyed || res.socket?.destroyed) {
+        res.destroy();
+        return;
+      }
       if (err instanceof ProtocolError) {
-        sendJson(res, STATUS_BY_CODE[err.code] ?? 400, { code: err.code, message: err.message });
+        const closing = err.code === ErrorCode.ARTIFACT_TOO_LARGE || err.code === ErrorCode.DIGEST_MISMATCH;
+        sendJson(
+          res,
+          STATUS_BY_CODE[err.code] ?? 400,
+          { code: err.code, message: err.message },
+          // The request body may be partly unread; do not reuse this connection.
+          closing ? { connection: 'close' } : {},
+        );
         return;
       }
       sendJson(res, 500, { code: 'INTERNAL', message: err.message });

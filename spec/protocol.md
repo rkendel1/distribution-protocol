@@ -152,6 +152,11 @@ https://…   s3://…   ipfs://…   file://…   registry://…
 all describe the same artifact, identified by `sha256:<hex>`. Acquisition MUST
 verify the digest; a mismatch fails.
 
+The signed manifest carries the digest and size, **never a location**. Where to
+fetch bytes is chosen by the consumer — a registry's digest-addressed content
+route (see [`registry-api.md`](./registry-api.md)), a mirror, a CDN — and may
+change at any time without touching a signature.
+
 ## 8. Registry
 
 The registry stores product identity, release metadata, signed manifests,
@@ -254,7 +259,8 @@ than in one implementation.
 6. Signatures MUST cover canonical manifest bytes.
 7. Verification MUST fail closed.
 8. Artifacts MUST be identified by digest, never by URL.
-9. Acquisition MUST verify the digest before returning bytes.
+9. Acquisition MUST verify the digest before returning bytes, and that digest
+   MUST come from the signed release, never from the source of the bytes.
 10. Resolution MUST be deterministic for the same registry state.
 11. Undocumented fields MUST be rejected.
 12. Discovery MUST NOT be required for resolution.

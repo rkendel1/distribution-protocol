@@ -26,8 +26,10 @@
  * Exit codes: 0 success, 1 failure, 2 usage error.
  */
 
-import { readFile, writeFile } from 'node:fs/promises';
-import { createPrivateKey, createPublicKey } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { createHash, createPrivateKey, createPublicKey } from 'node:crypto';
+import path from 'node:path';
 
 import {
   assertValidManifest,
@@ -36,7 +38,9 @@ import {
   signRelease,
   generatePublisherKeypair,
   resolveFromReleases,
-  acquire,
+  acquireArtifact,
+  AcquisitionOutcome,
+  TransportRegistry,
   receiptFromAcquisition,
   validateManifest,
   parseProductId,
@@ -54,7 +58,14 @@ import {
   documentIdOf,
   TrustOutcome,
 } from '../../protocol/src/index.mjs';
-import { LocalRegistry, HttpRegistryClient } from '../../registry/src/index.mjs';
+import {
+  LocalRegistry,
+  HttpRegistryClient,
+  serveRegistry,
+  registryTransport,
+  supportsArtifactContent,
+  DEFAULT_MAX_ARTIFACT_BYTES,
+} from '../../registry/src/index.mjs';
 import { createTrustStore, DEFAULT_TRUST_PATH } from './trust-store.mjs';
 
 const USAGE = `distribution — a client for the Distribution Protocol
@@ -63,11 +74,16 @@ const USAGE = `distribution — a client for the Distribution Protocol
   manifest canonicalize <file>       print canonical bytes (what gets signed)
   release sign <file> --key <pem>   sign a manifest into a release envelope
   release verify <file>             verify a release envelope
-  publish <file> --registry <url>   publish a release (idempotent, immutable)
+  publish <file> --registry <url> [--artifacts <dir>]
+                                    publish a release; with --artifacts, first
+                                    upload each artifact file (<dir>/<artifact-id>)
   get <release-id> --registry <url> fetch a release
   resolve <product-id> --os <os> --arch <arch> [--capability <c>]
                                     resolve for a target
-  acquire <release-id> --out <file> acquire and verify an artifact
+  acquire <release-id> --registry <url> --out <file> [--os <os> --arch <arch>] [--receipt <file>]
+                                    download an artifact by digest and verify it
+  serve --dir <path> [--port 8787] [--host 127.0.0.1] [--max-artifact-size <bytes>]
+                                    run a local HTTP registry (no authentication)
   receipt <release-id>              print an acquisition receipt
   keygen                            generate a publisher key pair
 
@@ -175,6 +191,8 @@ export async function run(argv) {
         return await runReceipt(positional, flags);
       case 'keygen':
         return await runKeygen(flags);
+      case 'serve':
+        return await runServe(flags);
       default:
         process.stderr.write(`unknown command: ${command}\n\n${USAGE}\n`);
         return 2;
@@ -249,7 +267,7 @@ async function runRelease(subcommand, positional, flags) {
 
 async function runPublish(positional, flags) {
   const file = positional[0];
-  if (!file) return fail('usage: distribution publish <release.json> --registry <url>');
+  if (!file) return fail('usage: distribution publish <release.json> --registry <url> [--artifacts <dir>]');
 
   const release = await readJson(file);
   // Verify before publishing: the registry refuses it anyway, but failing here
@@ -258,9 +276,67 @@ async function runPublish(positional, flags) {
   if (!result.valid) return fail(`refusing to publish: ${result.reason}`);
 
   const registry = await openRegistry(flags);
+
+  // Bytes go up BEFORE the release that names them, so a published release never
+  // points at bytes that are not there. Every file is checked against the
+  // manifest first: a mistake must fail before anything is uploaded.
+  if (flags.artifacts !== undefined) {
+    if (typeof flags.artifacts !== 'string') return fail('--artifacts requires a directory');
+    if (!supportsArtifactContent(registry)) {
+      return fail('this registry cannot store artifact bytes; publish without --artifacts');
+    }
+    const uploads = await collectArtifactUploads(release, flags.artifacts);
+    for (const upload of uploads) {
+      const stored = await registry.putArtifactStream(upload.digest, createReadStream(upload.file), {
+        size: upload.size,
+      });
+      out(`${stored.created ? 'uploaded' : 'present '}  ${upload.digest}  ${upload.size} bytes  (${upload.ids.join(', ')})`);
+    }
+  }
+
   const outcome = await registry.publishRelease(release);
   out(outcome.created ? `published  ${outcome.releaseId}` : `unchanged  ${outcome.releaseId} (already published)`);
   return 0;
+}
+
+/**
+ * Match a release's artifacts to files in a directory, verifying each.
+ *
+ * Artifact `id` is the file name (ids cannot contain a path separator). Each
+ * file must hash to the digest the publisher signed and have the declared size;
+ * artifacts that share a digest are uploaded once.
+ *
+ * @returns {Promise<Array<{digest: string, size: number, file: string, ids: string[]}>>}
+ */
+async function collectArtifactUploads(release, dir) {
+  const byDigest = new Map();
+  for (const artifact of release.manifest.artifacts ?? []) {
+    const file = path.join(dir, artifact.id);
+    const { digest, size } = await hashFile(file).catch((err) => {
+      throw new Error(`artifact ${artifact.id}: cannot read ${file}: ${err.message}`);
+    });
+    if (digest !== artifact.digest) {
+      throw new Error(`artifact ${artifact.id}: ${file} hashes to ${digest}, but the signed release says ${artifact.digest}`);
+    }
+    if (typeof artifact.size === 'number' && artifact.size !== size) {
+      throw new Error(`artifact ${artifact.id}: ${file} is ${size} bytes, but the signed release says ${artifact.size}`);
+    }
+    const entry = byDigest.get(digest) ?? { digest, size, file, ids: [] };
+    entry.ids.push(artifact.id);
+    byDigest.set(digest, entry);
+  }
+  return [...byDigest.values()];
+}
+
+/** SHA-256 and byte count of a file, streamed. */
+async function hashFile(file) {
+  const hash = createHash('sha256');
+  let size = 0;
+  for await (const chunk of createReadStream(file)) {
+    hash.update(chunk);
+    size += chunk.length;
+  }
+  return { digest: `sha256:${hash.digest('hex')}`, size };
 }
 
 async function runGet(positional, flags) {
@@ -302,31 +378,103 @@ async function runAcquire(positional, flags) {
   if (!releaseId) return fail('usage: distribution acquire <release-id> --registry <url> --out <file>');
 
   const registry = await openRegistry(flags);
+  // `getRelease` verifies the publisher's signature, so everything below is
+  // derived from signed data and not from anything the registry merely says.
   const release = await registry.getRelease(releaseId);
   if (!release) return fail(`release not found: ${releaseId}`);
 
-  const resolution = await registry.resolve({
-    product: releaseId.split('@')[0],
-    target: { os: flags.os ?? 'any', arch: flags.arch ?? 'any' },
-  });
+  const request = { product: releaseId.slice(0, releaseId.lastIndexOf('@')) };
+  request.target = { os: flags.os ?? 'any', arch: flags.arch ?? 'any' };
+  // Choose within THIS release locally. The registry's own resolve answer is not
+  // consulted: it must not be able to substitute a different artifact or digest.
+  const resolution = resolveFromReleases(request, [release]);
   if (!resolution.ok || !resolution.artifact) {
     return fail(`no artifact to acquire: ${resolution.reason ?? 'unknown'}`);
   }
+  const artifact = resolution.artifact;
 
-  // Acquisition verifies against the digest before the bytes are ever written.
-  const bytes = await acquire(resolution.artifact, {
-    location: `registry://${resolution.artifact.digest}`,
-    fetch: async () => registry.getArtifactBytes(resolution.artifact.digest),
-  });
+  // The location is derived from the signed digest and names no host. Whatever
+  // the registry streams back is hashed and must equal that digest.
+  const transports = new TransportRegistry().register(registryTransport(registry));
+  const result = await acquireArtifact(
+    { digest: artifact.digest, size: artifact.size, sources: [{ uri: `registry://${artifact.digest}` }] },
+    { transports },
+  );
+  if (!result.ok) {
+    const worst = result.attempts?.[0];
+    const prefix = result.outcome === AcquisitionOutcome.DIGEST_MISMATCH || worst?.outcome === AcquisitionOutcome.DIGEST_MISMATCH
+      ? 'INTEGRITY FAILURE — the registry returned bytes that do not match the signed digest.\n'
+      : '';
+    return fail(`${prefix}could not acquire ${artifact.id} (${artifact.digest}): ${result.reason}`);
+  }
 
+  // Nothing is written until the bytes are verified, and the file appears only
+  // when it is complete.
   if (flags.out && flags.out !== true) {
-    await writeFile(flags.out, bytes);
-    out(`acquired ${bytes.length} bytes`);
-    out(`digest   ${resolution.artifact.digest}  (verified)`);
+    const partial = `${flags.out}.partial`;
+    try {
+      await writeFile(partial, result.bytes);
+      await rename(partial, flags.out);
+    } catch (err) {
+      await rm(partial, { force: true }).catch(() => {});
+      throw err;
+    }
+    out(`acquired ${result.bytes.length} bytes`);
+    out(`digest   ${artifact.digest}  (verified)`);
     out(`written  ${flags.out}`);
   } else {
-    out(`digest   ${resolution.artifact.digest}  (verified, ${bytes.length} bytes)`);
+    out(`digest   ${artifact.digest}  (verified, ${result.bytes.length} bytes)`);
   }
+
+  if (flags.receipt && flags.receipt !== true) {
+    // A receipt is evidence of a VERIFIED acquisition, so it is only ever
+    // issued here, after the digest check above passed.
+    const receipt = receiptFromAcquisition({
+      release,
+      artifact,
+      timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    });
+    await writeFile(flags.receipt, `${JSON.stringify(receipt, null, 2)}\n`);
+    out(`receipt  ${flags.receipt}`);
+  }
+  return 0;
+}
+
+/**
+ * `serve` — run a local HTTP registry over a storage directory.
+ *
+ * Blocks until interrupted. Binds to loopback unless told otherwise because the
+ * reference server has no authentication.
+ */
+async function runServe(flags) {
+  if (typeof flags.dir !== 'string') return fail('usage: distribution serve --dir <path> [--port 8787] [--host 127.0.0.1]');
+
+  const port = flags.port === undefined ? 8787 : Number(flags.port);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) return fail(`invalid --port: ${flags.port}`);
+  const maxArtifactBytes =
+    flags['max-artifact-size'] === undefined ? DEFAULT_MAX_ARTIFACT_BYTES : Number(flags['max-artifact-size']);
+  if (!Number.isInteger(maxArtifactBytes) || maxArtifactBytes <= 0) {
+    return fail(`invalid --max-artifact-size: ${flags['max-artifact-size']}`);
+  }
+  const host = typeof flags.host === 'string' ? flags.host : '127.0.0.1';
+
+  const registry = await new LocalRegistry({ root: flags.dir }).init();
+  const server = await serveRegistry({ registry, host, port, maxArtifactBytes });
+
+  out(`distribution registry listening on ${server.url}`);
+  out(`storage  ${path.resolve(flags.dir)}`);
+  out(`limit    ${maxArtifactBytes} bytes per artifact`);
+  if (!['127.0.0.1', '::1', 'localhost'].includes(host)) {
+    process.stderr.write('warning: this registry has no authentication; anyone who can reach it can upload\n');
+  }
+
+  await new Promise((resolve) => {
+    const stop = () => resolve();
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+  });
+  await server.close();
+  out('registry stopped');
   return 0;
 }
 

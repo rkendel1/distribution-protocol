@@ -101,6 +101,91 @@ A client MAY use this for convenience, but MUST be able to compute the same
 answer locally. The reference client re-resolves from the verified release list
 so a registry cannot talk it into a different selection.
 
+### Artifact content (upload and download)
+
+Artifact bytes are stored and served by **digest**, never by name, version or
+URL:
+
+```
+PUT  /v1/artifacts/sha256%3A<hex>/content
+GET  /v1/artifacts/sha256%3A<hex>/content
+HEAD /v1/artifacts/sha256%3A<hex>/content
+```
+
+**Locations stay out of the signed manifest.** A manifest names an artifact by
+digest and size; it never says where the bytes are. A consumer finds bytes at
+whichever registry or mirror it chose, using the address above (the reference
+client calls this location `registry://<digest>`). Because the address is derived
+from the digest, moving or mirroring an artifact never changes a signature.
+
+Content routes are an **optional capability**: a registry that only indexes
+releases and leaves bytes to a CDN is still conformant. Such a registry answers
+these routes with `501` (`ARTIFACT_STORAGE_UNSUPPORTED`).
+
+#### Upload
+
+```
+PUT /v1/artifacts/{digest}/content
+Content-Type: application/octet-stream
+
+<raw bytes>
+```
+
+| Status | Meaning |
+| --- | --- |
+| `201` | Created — these bytes were not stored before |
+| `200` | Idempotent — identical bytes already stored |
+| `400` | Malformed digest (`BAD_REQUEST`) |
+| `413` | Larger than the registry's limit (`ARTIFACT_TOO_LARGE`) |
+| `422` | The bytes do not hash to the addressed digest (`DIGEST_MISMATCH`) |
+| `501` | Registry does not store artifact bytes |
+
+Returns `{"created": boolean, "digest": string, "size": number}`.
+
+A registry:
+
+1. MUST hash the bytes as they arrive and store them under the digest **only if
+   they match**. A mismatch stores nothing, so one corrupt upload can never
+   poison later downloads of that digest.
+2. MUST enforce a maximum size, rejecting early when `Content-Length` already
+   exceeds it and while streaming when the length is not declared. The limit is
+   the registry's choice and SHOULD be configurable.
+3. MUST leave nothing behind when an upload fails or is abandoned — no partial
+   file, no entry under the digest.
+4. MUST treat re-uploading identical bytes as idempotent.
+5. MUST NOT hold a whole artifact in memory to do any of this (a reference
+   in-memory registry is exempt; it exists to prove the contract).
+
+Upload checks protect the registry's **storage integrity**. They do not make the
+bytes authentic: a digest names bytes, not who vouches for them. Only the
+publisher's signature over the release that lists that digest does that.
+
+Uploading bytes before publishing the release that names them is the
+RECOMMENDED order, so a published release never points at bytes that are not
+there. A registry MUST NOT require it (a metadata-only registry has no bytes to
+require).
+
+#### Download
+
+```
+GET /v1/artifacts/{digest}/content
+```
+
+`200` with the raw bytes, `Content-Type: application/octet-stream`,
+`Content-Length`, `ETag: "sha256:<hex>"` and
+`Cache-Control: public, max-age=31536000, immutable` (a digest never changes
+meaning). `HEAD` returns the same headers with no body. `404`
+(`ARTIFACT_NOT_FOUND`) when the registry has no bytes for the digest.
+
+A registry that fails partway through a response MUST terminate the connection
+rather than end it cleanly, so a truncated body cannot be mistaken for a whole
+artifact.
+
+**A download is never trusted because of where it came from.** The client
+hashes what it received and compares it to the digest in the *signed release*.
+A registry that serves altered bytes — even while its metadata, headers or
+resolve answer all claim they are valid — is caught by that comparison.
+
 ## Errors
 
 Every error body carries a stable `code`:
@@ -120,6 +205,9 @@ Clients branch on `code`, never on message text.
 | `RELEASE_NOT_FOUND` | 404 |
 | `ARTIFACT_NOT_FOUND` | 404 |
 | `RELEASE_CONFLICT` | 409 |
+| `DIGEST_MISMATCH` | 422 |
+| `ARTIFACT_TOO_LARGE` | 413 |
+| `ARTIFACT_STORAGE_UNSUPPORTED` | 501 |
 
 ## Client obligations
 
@@ -127,10 +215,28 @@ The registry is **not** trusted for authenticity. A client:
 
 1. MUST verify the signature of every release it accepts;
 2. MUST discard releases that fail verification, including from `list`;
-3. MUST resolve deterministically from the verified set;
-4. MUST verify artifact digests before use.
+3. MUST resolve deterministically from the verified set — and MUST take the
+   artifact digest from the verified, signed release, never from a registry's
+   resolve response or artifact metadata;
+4. MUST hash downloaded bytes and compare them to that digest before using or
+   keeping them, whatever the registry claimed.
 
 These are enforced in
-[`http-client.mjs`](../packages/registry/src/http-client.mjs) and covered by
-the federation tests, which include a registry that deliberately returns a
-tampered release.
+[`http-client.mjs`](../packages/registry/src/http-client.mjs) and
+[`acquire.mjs`](../packages/protocol/src/acquire.mjs), and covered by the
+federation tests (which include a registry that deliberately returns a tampered
+release) and the end-to-end HTTP tests (which include a registry that serves
+altered bytes).
+
+## Running a registry
+
+The reference server is `distribution serve`:
+
+```bash
+distribution serve --dir ./registry --port 8787
+```
+
+It binds to `127.0.0.1` by default and has **no authentication**: anyone who can
+reach it can upload. Do not expose it to an untrusted network without a gateway
+that authenticates writes. Authentication and publisher-namespace ownership are
+deliberately outside this version of the API.

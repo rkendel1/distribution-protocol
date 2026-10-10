@@ -17,8 +17,9 @@
  * cannot clobber an existing release, rather than by a racy in-memory check.
  */
 
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { mkdir, open, link, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { createReadStream, existsSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 
 import {
@@ -36,6 +37,7 @@ import { parseProductId, parsePublisherId } from '../../protocol/src/identifiers
 import { digestHex, digestOfBytes, isDigest } from '../../protocol/src/artifact.mjs';
 import { canonicalize } from '../../protocol/src/canonical.mjs';
 import { orderReleases } from './contract.mjs';
+import { consumeVerified, DEFAULT_MAX_ARTIFACT_BYTES } from './artifact-store.mjs';
 
 export class LocalRegistry {
   /**
@@ -325,6 +327,75 @@ export class LocalRegistry {
       if (err.code === 'ENOENT') throw new ArtifactNotFoundError(`no artifact bytes for ${digest}`, { digest });
       throw err;
     }
+  }
+
+  /**
+   * Store artifact bytes from a stream under the digest the caller names.
+   *
+   * Bytes land in a temp file beside the target, are verified as they are
+   * written, and are linked into place only if the digest matches. A mismatch,
+   * an oversize upload or an interrupted stream removes the temp file, so a
+   * failed upload leaves nothing under the digest and nothing behind.
+   *
+   * Records no artifact metadata: a blob with no release is storage, not a
+   * published artifact (metadata is written when a release naming it is
+   * published).
+   *
+   * @param {string} digest
+   * @param {AsyncIterable<Uint8Array>} stream
+   * @param {{maxSize?: number}} [options]
+   * @returns {Promise<{created: boolean, digest: string, size: number}>}
+   */
+  async putArtifactStream(digest, stream, { maxSize = DEFAULT_MAX_ARTIFACT_BYTES } = {}) {
+    await mkdir(this.artifactsDir, { recursive: true });
+    const hex = isDigest(digest) ? digestHex(digest) : null;
+    const target = hex ? path.join(this.artifactsDir, `${hex}.bin`) : null;
+    const temp = path.join(this.artifactsDir, `.${hex ?? 'invalid'}.${randomBytes(8).toString('hex')}.partial`);
+
+    // Validate the digest (via consumeVerified) before touching the disk.
+    const handle = hex ? await open(temp, 'wx', 0o600) : null;
+    try {
+      const { size } = await consumeVerified(digest, stream, {
+        maxSize,
+        onChunk: (chunk) => handle.writeFile(chunk),
+      });
+      await handle.close();
+
+      // `link` fails with EEXIST rather than replacing, so "already present" is
+      // detected exactly instead of racing an existence check.
+      let created = true;
+      try {
+        await link(temp, target);
+      } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
+        created = false;
+      }
+      return { created, digest, size };
+    } catch (err) {
+      await handle?.close().catch(() => {});
+      throw err;
+    } finally {
+      await rm(temp, { force: true }).catch(() => {});
+    }
+  }
+
+  /**
+   * Open stored artifact bytes for reading.
+   * @param {string} digest
+   * @returns {Promise<{size: number, stream: AsyncIterable<Uint8Array>}>}
+   * @throws {ArtifactNotFoundError}
+   */
+  async openArtifact(digest) {
+    if (!isDigest(digest)) throw new ArtifactNotFoundError(`no artifact bytes for ${digest}`, { digest });
+    const file = path.join(this.artifactsDir, `${digestHex(digest)}.bin`);
+    let info;
+    try {
+      info = await stat(file);
+    } catch (err) {
+      if (err.code === 'ENOENT') throw new ArtifactNotFoundError(`no artifact bytes for ${digest}`, { digest });
+      throw err;
+    }
+    return { size: info.size, stream: createReadStream(file) };
   }
 
   /**

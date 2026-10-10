@@ -31,6 +31,7 @@ import { productIdOf, parseProductId } from '../../protocol/src/identifiers.mjs'
 import { digestOfBytes, isDigest, validateArtifactMetadata } from '../../protocol/src/artifact.mjs';
 import { ProtocolError } from '../../protocol/src/errors.mjs';
 import { orderReleases, isSameRelease } from './contract.mjs';
+import { consumeVerified, DEFAULT_MAX_ARTIFACT_BYTES } from './artifact-store.mjs';
 
 export class MemoryRegistry {
   /**
@@ -279,6 +280,51 @@ export class MemoryRegistry {
     const bytes = this.blobs.get(digest);
     if (!bytes) throw new ArtifactNotFoundError(`no artifact bytes for ${digest}`, { digest });
     return bytes;
+  }
+
+  /**
+   * Store artifact bytes from a stream under the digest the caller names.
+   *
+   * The bytes are hashed as they arrive and become visible only if they match;
+   * a mismatch or an oversize upload stores nothing. Records no artifact
+   * metadata: a blob with no release is storage, not a published artifact.
+   *
+   * @param {string} digest
+   * @param {AsyncIterable<Uint8Array>} stream
+   * @param {{maxSize?: number}} [options]
+   * @returns {Promise<{created: boolean, digest: string, size: number}>}
+   */
+  async putArtifactStream(digest, stream, { maxSize = DEFAULT_MAX_ARTIFACT_BYTES } = {}) {
+    const chunks = [];
+    const { size } = await consumeVerified(digest, stream, {
+      maxSize,
+      onChunk: (chunk) => chunks.push(new Uint8Array(chunk)),
+    });
+    if (this.blobs.has(digest)) return { created: false, digest, size };
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    this.blobs.set(digest, bytes);
+    return { created: true, digest, size };
+  }
+
+  /**
+   * Open stored artifact bytes for reading.
+   * @param {string} digest
+   * @returns {Promise<{size: number, stream: AsyncIterable<Uint8Array>}>}
+   * @throws {ArtifactNotFoundError}
+   */
+  async openArtifact(digest) {
+    const bytes = await this.getArtifactBytes(digest);
+    return {
+      size: bytes.length,
+      stream: (async function* single() {
+        yield bytes;
+      })(),
+    };
   }
 
   /**
