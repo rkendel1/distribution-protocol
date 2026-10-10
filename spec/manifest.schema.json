@@ -4,6 +4,32 @@
       "additionalProperties": false,
       "description": "A content-addressed distribution object.",
       "properties": {
+        "bindings": {
+          "description": "Optional signed identity bindings, at most one per scheme.",
+          "items": {
+            "additionalProperties": false,
+            "description": "A publisher-signed claim that this artifact has a given identity in another scheme. It is separate from, and never replaces, the artifact digest.",
+            "properties": {
+              "scheme": {
+                "description": "Versioned scheme name, e.g. appboundry/package-identity/1.",
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,62}/[a-z0-9][a-z0-9.-]{0,62}/[0-9]{1,4}$",
+                "type": "string"
+              },
+              "value": {
+                "description": "Identity in that scheme.",
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "scheme",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
         "digest": {
           "description": "Content address. This is the artifact identity.",
           "pattern": "^sha256:[a-f0-9]{64}$",
@@ -62,6 +88,28 @@
       ],
       "type": "object"
     },
+    "binding": {
+      "additionalProperties": false,
+      "description": "A publisher-signed claim that this artifact has a given identity in another scheme. It is separate from, and never replaces, the artifact digest.",
+      "properties": {
+        "scheme": {
+          "description": "Versioned scheme name, e.g. appboundry/package-identity/1.",
+          "pattern": "^[a-z0-9][a-z0-9.-]{0,62}/[a-z0-9][a-z0-9.-]{0,62}/[0-9]{1,4}$",
+          "type": "string"
+        },
+        "value": {
+          "description": "Identity in that scheme.",
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "scheme",
+        "value"
+      ],
+      "type": "object"
+    },
     "interface": {
       "additionalProperties": false,
       "description": "A way to consume the product, possibly without installing an artifact.",
@@ -113,6 +161,32 @@
             "additionalProperties": false,
             "description": "A content-addressed distribution object.",
             "properties": {
+              "bindings": {
+                "description": "Optional signed identity bindings, at most one per scheme.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A publisher-signed claim that this artifact has a given identity in another scheme. It is separate from, and never replaces, the artifact digest.",
+                  "properties": {
+                    "scheme": {
+                      "description": "Versioned scheme name, e.g. appboundry/package-identity/1.",
+                      "pattern": "^[a-z0-9][a-z0-9.-]{0,62}/[a-z0-9][a-z0-9.-]{0,62}/[0-9]{1,4}$",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "Identity in that scheme.",
+                      "maxLength": 256,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "scheme",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "digest": {
                 "description": "Content address. This is the artifact identity.",
                 "pattern": "^sha256:[a-f0-9]{64}$",

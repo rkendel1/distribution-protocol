@@ -16,7 +16,14 @@
 
 import { ErrorCode, ManifestValidationError } from './errors.mjs';
 import { isDigest } from './artifact.mjs';
-import { ARTIFACT_ID_RE, INTERFACE_ID_RE, PROTOCOL_ID, TOKEN_RE } from './schema.mjs';
+import {
+  ARTIFACT_ID_RE,
+  BINDING_SCHEME_RE,
+  INTERFACE_ID_RE,
+  PROTOCOL_ID,
+  TOKEN_RE,
+  isValidBindingValue,
+} from './schema.mjs';
 import {
   isProductId,
   isPublisherId,
@@ -170,7 +177,7 @@ function validateArtifacts(artifacts, add) {
       add(at, 'must be an object');
       return;
     }
-    const KNOWN = new Set(['id', 'digest', 'mediaType', 'size', 'target']);
+    const KNOWN = new Set(['id', 'digest', 'mediaType', 'size', 'target', 'bindings']);
     for (const key of Object.keys(artifact)) {
       if (!KNOWN.has(key)) add(`${at}.${key}`, `unknown field "${key}"`, ErrorCode.UNKNOWN_FIELD);
     }
@@ -191,6 +198,33 @@ function validateArtifacts(artifacts, add) {
       add(`${at}.size`, 'must be a non-negative integer when present');
     }
     validateTarget(artifact.target, `${at}.target`, add);
+    if (artifact.bindings !== undefined) validateBindings(artifact.bindings, `${at}.bindings`, add);
+  });
+}
+
+function validateBindings(bindings, path, add) {
+  if (!Array.isArray(bindings)) {
+    add(path, 'must be an array when present');
+    return;
+  }
+  const schemes = new Set();
+  bindings.forEach((entry, i) => {
+    const at = `${path}[${i}]`;
+    if (!isPlainObject(entry)) {
+      add(at, 'must be an object');
+      return;
+    }
+    for (const key of Object.keys(entry)) {
+      if (key !== 'scheme' && key !== 'value') add(`${at}.${key}`, `unknown field "${key}"`, ErrorCode.UNKNOWN_FIELD);
+    }
+    if (typeof entry.scheme !== 'string' || !BINDING_SCHEME_RE.test(entry.scheme)) {
+      add(`${at}.scheme`, 'missing or malformed binding scheme');
+    } else if (schemes.has(entry.scheme)) {
+      add(`${at}.scheme`, `duplicate binding scheme ${JSON.stringify(entry.scheme)} on one artifact`);
+    } else {
+      schemes.add(entry.scheme);
+      if (!isValidBindingValue(entry.scheme, entry.value)) add(`${at}.value`, `malformed value for scheme ${entry.scheme}`);
+    }
   });
 }
 

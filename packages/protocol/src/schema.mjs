@@ -50,10 +50,53 @@ const target = {
   type: 'object',
 };
 
+/** Binding scheme: `<namespace>/<name>/<major version>`, e.g. `appboundry/package-identity/1`. */
+export const BINDING_SCHEME_PATTERN = '^[a-z0-9][a-z0-9.-]{0,62}/[a-z0-9][a-z0-9.-]{0,62}/[0-9]{1,4}$';
+export const BINDING_SCHEME_RE = new RegExp(BINDING_SCHEME_PATTERN);
+
+/**
+ * Binding schemes this implementation knows how to check. The value of a known
+ * scheme is validated strictly; an unknown but well-formed scheme is carried
+ * (and signed) opaquely and is never treated as verified by anything here.
+ */
+export const BindingScheme = Object.freeze({
+  /** The consumer-computed package identity of an AppBoundry package: `sha256:<hex>`. */
+  APPBOUNDRY_PACKAGE_IDENTITY: 'appboundry/package-identity/1',
+});
+
+const SCHEME_VALUE_RULES = Object.freeze({
+  [BindingScheme.APPBOUNDRY_PACKAGE_IDENTITY]: (value) => /^sha256:[a-f0-9]{64}$/.test(value),
+});
+
+/** Is `value` acceptable for `scheme`? Unknown schemes accept any bounded non-empty string. */
+export function isValidBindingValue(scheme, value) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 256) return false;
+  const rule = SCHEME_VALUE_RULES[scheme];
+  return rule ? rule(value) : true;
+}
+
+const binding = {
+  additionalProperties: false,
+  description:
+    'A publisher-signed claim that this artifact has a given identity in another scheme. ' +
+    'It is separate from, and never replaces, the artifact digest.',
+  properties: {
+    scheme: { description: 'Versioned scheme name, e.g. appboundry/package-identity/1.', pattern: BINDING_SCHEME_PATTERN, type: 'string' },
+    value: { description: 'Identity in that scheme.', maxLength: 256, minLength: 1, type: 'string' },
+  },
+  required: ['scheme', 'value'],
+  type: 'object',
+};
+
 const artifact = {
   additionalProperties: false,
   description: 'A content-addressed distribution object.',
   properties: {
+    bindings: {
+      description: 'Optional signed identity bindings, at most one per scheme.',
+      items: binding,
+      type: 'array',
+    },
     digest: {
       description: 'Content address. This is the artifact identity.',
       pattern: '^sha256:[a-f0-9]{64}$',
@@ -143,6 +186,7 @@ export const MANIFEST_SCHEMA = Object.freeze({
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $defs: {
     artifact,
+    binding,
     interface: iface,
     product,
     publisher,

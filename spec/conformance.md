@@ -210,3 +210,18 @@ rather than a feature.
   rotated lineage is still accepted;
 - receipts never claim trust or revocation checks that were not performed;
 - a refused acquisition leaves no destination file, partial file or receipt.
+
+### Identity bindings
+
+`packages/conformance/src/identity-binding.test.mjs` and
+`packages/cli/src/acquire-binding-e2e.test.mjs` require that:
+
+- a matching signed binding is accepted and recorded in the receipt;
+- a different, internally valid package bound to another identity is refused
+  before any bytes are accepted;
+- a binding altered or injected after signing invalidates the release;
+- a missing binding is `BINDING_MISSING`, never verified;
+- a release without bindings keeps its canonical bytes and is acquired by a
+  generic consumer with no identity claim;
+- digest mismatch, untrusted or revoked publishers and invalid signatures are
+  still refused when the identity matches, and refusals leave no file or receipt.

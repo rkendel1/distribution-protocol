@@ -132,6 +132,8 @@ export {
   verifyPublisherLineage,
 } from './trust.mjs';
 export { verifyAcquisitionTrust } from './acquire-trust.mjs';
+export { BindingOutcome, authenticatedBindings, checkArtifactBinding } from './bindings.mjs';
+export { BindingScheme, BINDING_SCHEME_RE, isValidBindingValue } from './schema.mjs';
 
 // Publisher discovery
 export {

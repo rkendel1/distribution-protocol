@@ -157,6 +157,42 @@ fetch bytes is chosen by the consumer — a registry's digest-addressed content
 route (see [`registry-api.md`](./registry-api.md)), a mirror, a CDN — and may
 change at any time without touching a signature.
 
+### 7.1 Identity bindings
+
+The artifact digest identifies **bytes**. Some products also have an identity of
+their own for what those bytes contain (for example an AppBoundry package
+identity). An artifact MAY carry an optional `bindings` array of
+`{scheme, value}`, a publisher's claim that this artifact has that identity in
+that scheme:
+
+```json
+"bindings": [{ "scheme": "appboundry/package-identity/1", "value": "sha256:<64 hex>" }]
+```
+
+- `scheme` is `<namespace>/<name>/<major version>`. At most one binding per
+  scheme per artifact. The `value` of a known scheme is validated strictly
+  (`appboundry/package-identity/1`: `sha256:<64 lowercase hex>`); an unknown but
+  well-formed scheme is carried and signed opaquely.
+- Bindings live inside the manifest, so the release signature covers them. A
+  binding altered, added or removed after signing invalidates the signature.
+- The binding value is **not** the artifact digest and MUST NOT be derived from
+  it or used in its place. This protocol never computes or interprets a foreign
+  identity: it authenticates the publisher's claim and compares it with a
+  consumer-supplied expectation. Whether the bytes really have that identity is
+  the consuming product's loader to recompute.
+- A consumer that requires an identity (`distribution acquire
+  --expect-appboundry-identity sha256:<hex>`) MUST refuse the artifact, before
+  accepting any bytes, when the release is unauthenticated, carries no binding
+  in that scheme (`BINDING_MISSING`), or binds a different identity
+  (`BINDING_MISMATCH`). A missing binding is never reported as verified.
+- Bindings are optional and no consumer is required to use them. A release
+  without `bindings` has exactly the canonical bytes and signature it always
+  had. Because manifests reject undocumented fields (rule 11), an implementation
+  that predates `bindings` rejects a release carrying them (fail closed); it
+  does not ignore the claim.
+- A receipt records `verification.identityBinding` only when an expectation was
+  supplied and satisfied.
+
 ## 8. Registry
 
 The registry stores product identity, release metadata, signed manifests,
@@ -300,6 +336,11 @@ than in one implementation.
     for signature verification (or the reverse).
 16. A registry that enforces namespace ownership is performing admission control,
     not establishing trust: consumers MUST still verify everything they accept.
+17. A consumer that requires an identity binding MUST authenticate the release
+    first, compare the signed binding with its expectation, and refuse the
+    artifact before accepting bytes on a missing or different binding. A binding
+    MUST NOT be accepted from an unsigned or post-signing source, and the artifact
+    digest MUST NOT stand in for it.
 
 ## 16. Non-goals
 
