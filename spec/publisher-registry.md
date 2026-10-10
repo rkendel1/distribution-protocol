@@ -51,12 +51,30 @@ that can only return "latest" is incomplete.
 | 400 | `BAD_REQUEST` | malformed identifier, malformed JSON, or path/document mismatch |
 | 401 | `INVALID_SIGNATURE` | document signature does not verify |
 | 404 | `PUBLISHER_NOT_FOUND` | no document for that publisher |
-| 409 | `PUBLISHER_CONFLICT` | a different document at an existing sequence |
-| 422 | `INVALID_PUBLISHER_DOCUMENT` | well-formed but structurally invalid |
+| 409 | `PUBLISHER_CONFLICT` | a different document at an existing sequence, or one that does not extend the current head |
+| 422 | `INVALID_PUBLISHER_DOCUMENT` | well-formed but structurally invalid, or a lineage that does not start at sequence 1 |
+| 401 | `AUTHENTICATION_REQUIRED` · `INVALID_CREDENTIALS` · `CREDENTIALS_EXPIRED` | see [registry-auth.md](registry-auth.md) |
+| 403 | `FORBIDDEN` | the credential has no write grant for this namespace |
+| 403 | `OWNERSHIP_VIOLATION` | the document is not signed by a key the current head authorizes |
 
 400 versus 422/401 matters to a publisher: 400 means "fix your JSON", 401 means
 "your key is wrong", 422 means "your document is wrong". Three different
 problems.
+
+## Who may publish, and key continuity
+
+A registry that enforces namespace ownership
+([registry-auth.md](registry-auth.md)) admits a document only when:
+
+1. the caller's credential grants the namespace;
+2. it starts the lineage (`sequence: 1`, no predecessor), **or** it is the head's
+   direct successor — sequence `head + 1`, naming the head's `documentId` — and is
+   signed by a key that is **active in the head**.
+
+Re-filing a stored document is an idempotent no-op that never moves the head.
+This is admission control: it stops a registry *distributing* a takeover. It is
+not what makes a document true — consumers verify lineage themselves
+(`verifyPublisherLineage` enforces the same continuity rule).
 
 ## Immutability and idempotency
 

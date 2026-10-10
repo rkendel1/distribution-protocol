@@ -44,6 +44,7 @@ import {
   keyFingerprint,
   keyStateAt,
   verifyPublisherDocumentSignature,
+  verifyPublisherSuccession,
 } from './publisher.mjs';
 import { canonicalBytes } from './canonical.mjs';
 import { parseProductId, parsePublisherId } from './identifiers.mjs';
@@ -522,6 +523,20 @@ export function verifyPublisherLineage(envelopes) {
         length: ordered.length,
         head: null,
       };
+    }
+    // Continuity: every document after the first must be authorized by the one
+    // it supersedes. Self-consistency alone would let anyone append a "successor"
+    // signed by their own new key.
+    if (index > 0) {
+      const succession = verifyPublisherSuccession(ordered[index - 1], envelope);
+      if (!succession.valid) {
+        return {
+          valid: false,
+          reason: `document #${index + 1} is not authorized by document #${index}: ${succession.reason}`,
+          length: ordered.length,
+          head: null,
+        };
+      }
     }
     previousId = documentIdOf(envelope.document);
   }

@@ -27,7 +27,7 @@
  */
 
 import { createReadStream } from 'node:fs';
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createHash, createPrivateKey, createPublicKey } from 'node:crypto';
 import path from 'node:path';
 
@@ -65,6 +65,8 @@ import {
   registryTransport,
   supportsArtifactContent,
   DEFAULT_MAX_ARTIFACT_BYTES,
+  TokenStore,
+  parseDuration,
 } from '../../registry/src/index.mjs';
 import { createTrustStore, DEFAULT_TRUST_PATH } from './trust-store.mjs';
 
@@ -72,7 +74,9 @@ const USAGE = `distribution — a client for the Distribution Protocol
 
   manifest validate <file>          validate a manifest against the schema
   manifest canonicalize <file>       print canonical bytes (what gets signed)
-  release sign <file> --key <pem>   sign a manifest into a release envelope
+  release sign <file> --key <pem> [--key-id <id> --publisher-document <doc.json>]
+                                    sign a manifest into a release envelope; with a
+                                    publisher document the key must be one it declares
   release verify <file>             verify a release envelope
   publish <file> --registry <url> [--artifacts <dir>]
                                     publish a release; with --artifacts, first
@@ -83,7 +87,20 @@ const USAGE = `distribution — a client for the Distribution Protocol
   acquire <release-id> --registry <url> --out <file> [--os <os> --arch <arch>] [--receipt <file>]
                                     download an artifact by digest and verify it
   serve --dir <path> [--port 8787] [--host 127.0.0.1] [--max-artifact-size <bytes>]
-                                    run a local HTTP registry (no authentication)
+        [--tokens <file>] [--require-auth-for-read] [--insecure-no-auth]
+                                    run an HTTP registry; writes need a credential
+                                    unless --insecure-no-auth (loopback only)
+  registry token create --dir <path> --namespace <ns[,ns]> [--read-only]
+        [--expires-in 90d|never] [--label <text>]
+                                    issue a credential (printed once; only a hash is kept)
+  registry token list|revoke <id> --dir <path>
+                                    list credentials / revoke one
+  publisher publish <doc.json> --registry <url>
+                                    claim a namespace or publish its next document
+
+Credentials: set DISTRIBUTION_TOKEN or pass --token-file <path>. A token is never
+accepted as a command-line value. Sent only over https:// or to localhost unless
+--allow-insecure-http.
   receipt <release-id>              print an acquisition receipt
   keygen                            generate a publisher key pair
 
@@ -129,7 +146,11 @@ async function openRegistry(flags) {
     throw new Error('a --registry is required (use file://<path> for a local registry)');
   }
   if (target.startsWith('http://') || target.startsWith('https://')) {
-    return new HttpRegistryClient({ baseUrl: target });
+    return new HttpRegistryClient({
+      baseUrl: target,
+      token: await readToken(flags),
+      allowInsecureHttp: flags['allow-insecure-http'] === true,
+    });
   }
   // `file://./registry` is not a valid absolute URL, and `new URL()` would
   // silently resolve it to `/registry`. Only decode a real absolute file URL;
@@ -138,6 +159,39 @@ async function openRegistry(flags) {
     ? decodeURIComponent(new URL(target).pathname)
     : target.replace(/^file:\/\//, '');
   return new LocalRegistry({ root }).init();
+}
+
+/**
+ * The registry credential, from `DISTRIBUTION_TOKEN` or `--token-file`.
+ *
+ * Never from a command-line value: that would land in shell history and
+ * process listings (the same rule as private keys). Errors here never include
+ * the token.
+ *
+ * @returns {Promise<string|undefined>}
+ */
+async function readToken(flags) {
+  if (flags.token !== undefined) {
+    throw new Error(
+      '--token is not accepted: a credential on the command line leaks into shell history and process listings. ' +
+        'Set DISTRIBUTION_TOKEN or use --token-file <path>',
+    );
+  }
+  if (flags['token-file'] !== undefined) {
+    if (typeof flags['token-file'] !== 'string') throw new Error('--token-file requires a path');
+    let text;
+    try {
+      text = await readFile(flags['token-file'], 'utf8');
+      const mode = (await stat(flags['token-file'])).mode;
+      if (process.platform !== 'win32' && (mode & 0o077) !== 0) {
+        process.stderr.write(`warning: ${flags['token-file']} is readable by other users; restrict it with chmod 600\n`);
+      }
+    } catch (err) {
+      throw new Error(`cannot read token file ${flags['token-file']}: ${err.code ?? 'error'}`);
+    }
+    return text.trim() || undefined;
+  }
+  return process.env.DISTRIBUTION_TOKEN?.trim() || undefined;
 }
 
 async function readJson(file) {
@@ -165,7 +219,7 @@ export async function run(argv) {
   // `manifest` and `release` take a subcommand; everything else treats its
   // arguments directly. Slice explicitly rather than searching for the command
   // name, which can also appear as a flag value (e.g. `--key release`).
-  const takesSubcommand = (command === 'manifest' || command === 'release' || command === 'trust' || command === 'publisher') && subcommand && !subcommand.startsWith('--');
+  const takesSubcommand = (command === 'manifest' || command === 'release' || command === 'trust' || command === 'publisher' || command === 'registry') && subcommand && !subcommand.startsWith('--');
   const remainder = takesSubcommand ? [subcommand, ...rest] : [subcommand, ...rest].filter(Boolean);
   const { positional, flags } = parseArgs(remainder);
 
@@ -193,6 +247,8 @@ export async function run(argv) {
         return await runKeygen(flags);
       case 'serve':
         return await runServe(flags);
+      case 'registry':
+        return await runRegistryAdmin(positional, flags);
       default:
         process.stderr.write(`unknown command: ${command}\n\n${USAGE}\n`);
         return 2;
@@ -236,8 +292,14 @@ async function runRelease(subcommand, positional, flags) {
     if (!flags.key || flags.key === true) return fail('signing requires --key <private.pem>');
     const manifest = await readJson(file);
     assertValidManifest(manifest);
-    const privateKey = await readFile(flags.key, 'utf8');
-    const release = signRelease(manifest, privateKey);
+    const keyObject = createPrivateKey(await readFile(flags.key, 'utf8'));
+    // Binding to a publisher document proves the key is one the publisher
+    // declares, and records which document authorized it.
+    const keyId = typeof flags['key-id'] === 'string' ? flags['key-id'] : undefined;
+    const publisherDocument =
+      typeof flags['publisher-document'] === 'string' ? await readJson(flags['publisher-document']) : undefined;
+    if (publisherDocument && !keyId) return fail('--publisher-document requires --key-id (the key name in that document)');
+    const release = signRelease(manifest, keyObject, { keyId, publisherDocument });
     const json = `${JSON.stringify(release, null, 2)}\n`;
     if (flags.out && flags.out !== true) {
       await writeFile(flags.out, json);
@@ -457,16 +519,38 @@ async function runServe(flags) {
     return fail(`invalid --max-artifact-size: ${flags['max-artifact-size']}`);
   }
   const host = typeof flags.host === 'string' ? flags.host : '127.0.0.1';
+  const insecure = flags['insecure-no-auth'] === true;
+  if (insecure && flags['require-auth-for-read']) {
+    return fail('--insecure-no-auth cannot be combined with --require-auth-for-read');
+  }
 
-  const registry = await new LocalRegistry({ root: flags.dir }).init();
-  const server = await serveRegistry({ registry, host, port, maxArtifactBytes });
+  // Authentication is the default. Namespace ownership is enforced with it:
+  // a registry that takes credentials also decides who owns what it stores.
+  let auth = null;
+  if (!insecure) {
+    const tokens = await new TokenStore({ path: tokensPath(flags) }).open();
+    auth = {
+      tokens,
+      readAccess: flags['require-auth-for-read'] === true ? 'authenticated' : 'public',
+      // Method, path, status and token id only; never a secret or a body.
+      logger: ({ method, path: route, status, tokenId }) =>
+        process.stderr.write(`access  ${method} ${route} ${status} token=${tokenId ?? '-'}\n`),
+    };
+    if ((await tokens.list()).every((t) => t.revokedAt)) {
+      process.stderr.write(
+        'warning: no active credentials; every write will be refused. ' +
+          'Create one with: distribution registry token create --dir <path> --namespace <ns>\n',
+      );
+    }
+  }
+
+  const registry = await new LocalRegistry({ root: flags.dir, enforceOwnership: !insecure }).init();
+  const server = await serveRegistry({ registry, host, port, maxArtifactBytes, auth });
 
   out(`distribution registry listening on ${server.url}`);
   out(`storage  ${path.resolve(flags.dir)}`);
   out(`limit    ${maxArtifactBytes} bytes per artifact`);
-  if (!['127.0.0.1', '::1', 'localhost'].includes(host)) {
-    process.stderr.write('warning: this registry has no authentication; anyone who can reach it can upload\n');
-  }
+  out(insecure ? 'auth     OFF (--insecure-no-auth): anyone who can reach this can write' : `auth     on (reads: ${auth.readAccess})`);
 
   await new Promise((resolve) => {
     const stop = () => resolve();
@@ -475,6 +559,69 @@ async function runServe(flags) {
   });
   await server.close();
   out('registry stopped');
+  return 0;
+}
+
+/** Where the token file lives: `--tokens`, else `<dir>/auth/tokens.json`. */
+function tokensPath(flags) {
+  if (typeof flags.tokens === 'string') return flags.tokens;
+  if (typeof flags.dir === 'string') return path.join(flags.dir, 'auth', 'tokens.json');
+  throw new Error('--dir <registry path> (or --tokens <file>) is required');
+}
+
+/**
+ * `registry token create|list|revoke` — operator-side credential management.
+ *
+ * Operates directly on the registry's token file: credentials are issued by
+ * whoever runs the registry, never through the API (a token cannot mint,
+ * widen or transfer a token).
+ */
+async function runRegistryAdmin(positional, flags) {
+  const [resource, action, ...rest] = positional;
+  if (resource !== 'token' || !['create', 'list', 'revoke'].includes(action)) {
+    return fail('usage: distribution registry token <create|list|revoke> --dir <registry path>');
+  }
+  const store = await new TokenStore({ path: tokensPath(flags) }).open();
+
+  if (action === 'create') {
+    const namespaces = typeof flags.namespace === 'string' ? flags.namespace.split(',').filter(Boolean) : [];
+    if (namespaces.length === 0 && flags['read-only'] !== true) {
+      return fail('--namespace <ns[,ns]> is required (or --read-only for a credential that can write nothing)');
+    }
+    if (namespaces.length > 0 && flags['read-only'] === true) {
+      return fail('--read-only cannot be combined with --namespace');
+    }
+    const lifetime = flags['expires-in'] === undefined ? '90d' : String(flags['expires-in']);
+    const expiresAt = lifetime === 'never' ? null : new Date(Date.now() + parseDuration(lifetime)).toISOString();
+    const { token, record } = await store.create({
+      namespaces,
+      label: typeof flags.label === 'string' ? flags.label : undefined,
+      expiresAt,
+    });
+    // Details to stderr, the credential alone to stdout: `TOKEN=$(… token create …)`.
+    process.stderr.write(`token id    ${record.id}\n`);
+    process.stderr.write(`namespaces ${record.namespaces.join(', ') || '(none: read-only)'}\n`);
+    process.stderr.write(`expires    ${record.expiresAt ?? 'never'}\n`);
+    process.stderr.write('Shown once. Only a hash is stored; it cannot be recovered. Keep it secret.\n');
+    out(token);
+    return 0;
+  }
+
+  if (action === 'list') {
+    const tokens = await store.list();
+    if (tokens.length === 0) out('(no credentials)');
+    for (const t of tokens) {
+      const state = t.revokedAt ? 'revoked' : t.expiresAt && Date.parse(t.expiresAt) <= Date.now() ? 'expired' : 'active';
+      out(`${t.id}  ${state.padEnd(7)}  ${(t.namespaces.join(',') || '(read-only)').padEnd(24)}  expires ${t.expiresAt ?? 'never'}${t.label ? `  ${t.label}` : ''}`);
+    }
+    return 0;
+  }
+
+  const [id] = rest;
+  if (!id) return fail('usage: distribution registry token revoke <id> --dir <registry path>');
+  const revoked = await store.revoke(id);
+  if (!revoked) return fail(`no active credential ${id}`);
+  out(`revoked  ${id}`);
   return 0;
 }
 
@@ -649,6 +796,26 @@ async function runPublisher(action, positional, flags) {
       for (const key of doc.keys ?? []) {
         out(`${key.id}  ${key.state ?? KeyState.ACTIVE}  ${key.publicKey?.slice(0, 16)}…`);
       }
+      return 0;
+    }
+
+    case 'publish': {
+      const file = positional[1];
+      if (!file) return fail('usage: distribution publisher publish <doc.json> --registry <url>');
+      const envelope = await readJson(file);
+      // Refuse locally what the registry would refuse, with a clearer error.
+      const check = verifyPublisherDocumentSignature(envelope);
+      if (!check.valid) return fail(`refusing to publish: ${check.reason}`);
+
+      const registry = await openRegistry(flags);
+      const result = await registry.publishPublisher(envelope);
+      const id = envelope.document.publisher.id;
+      if (result.created) {
+        out(`${result.sequence === 1 ? 'claimed  ' : 'published'}  ${id}  sequence ${result.sequence}`);
+      } else {
+        out(`unchanged  ${id}  sequence ${result.sequence} (already published)`);
+      }
+      out(`document  ${result.documentId}`);
       return 0;
     }
 
@@ -852,7 +1019,13 @@ function nowStamp() {
 async function registryFromFlags(flags) {
   const spec = typeof flags.registry === 'string' ? flags.registry : undefined;
   if (!spec) return null;
-  if (/^https?:\/\//.test(spec)) return new HttpRegistryClient({ baseUrl: spec });
+  if (/^https?:\/\//.test(spec)) {
+    return new HttpRegistryClient({
+      baseUrl: spec,
+      token: await readToken(flags),
+      allowInsecureHttp: flags['allow-insecure-http'] === true,
+    });
+  }
   // LocalRegistry needs its storage directories created before use.
   return new LocalRegistry({ root: spec }).init();
 }

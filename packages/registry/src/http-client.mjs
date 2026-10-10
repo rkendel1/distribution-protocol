@@ -19,6 +19,9 @@ import { digestOfBytes, isDigest } from '../../protocol/src/artifact.mjs';
 import { verifyRelease } from '../../protocol/src/signing.mjs';
 import { resolveFromReleases } from '../../protocol/src/resolve.mjs';
 import { parsePublisherId } from '../../protocol/src/identifiers.mjs';
+import { TOKEN_PATTERN } from './auth.mjs';
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', '[::1]', 'localhost']);
 
 /** Turn a non-2xx response into a ProtocolError carrying the server's code. */
 async function toError(res) {
@@ -41,10 +44,41 @@ export class HttpRegistryClient {
    * @param {(release: object) => boolean} [options.verify]
    *   override the authenticity check applied to every release read back
    */
-  constructor({ baseUrl, fetch: fetchImpl = globalThis.fetch } = {}) {
+  constructor({ baseUrl, fetch: fetchImpl = globalThis.fetch, token, allowInsecureHttp = false } = {}) {
     if (!baseUrl) throw new Error('HttpRegistryClient requires a baseUrl');
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.fetch = fetchImpl;
+
+    if (token !== undefined && token !== null && token !== '') {
+      // Messages below never include the token, or any part of it.
+      if (typeof token !== 'string' || !TOKEN_PATTERN.test(token)) {
+        throw new Error('the registry token is malformed (expected dpt_<id>.<secret>)');
+      }
+      const url = new URL(this.baseUrl);
+      if (url.protocol !== 'https:' && !LOOPBACK_HOSTS.has(url.hostname) && !allowInsecureHttp) {
+        throw new Error(
+          `refusing to send credentials to ${url.origin} over plain HTTP; use https:// or pass allowInsecureHttp`,
+        );
+      }
+      this.#token = token;
+    }
+  }
+
+  /** The credential. A private field: it is not enumerated, serialized or inspected. */
+  #token = null;
+
+  /**
+   * Every request goes through here. A credential is attached only here, and
+   * redirects are refused while one is held so it can never follow a redirect
+   * to another origin.
+   */
+  request(url, init = {}) {
+    if (!this.#token) return this.fetch(url, init);
+    return this.fetch(url, {
+      ...init,
+      redirect: 'error',
+      headers: { ...init.headers, authorization: `Bearer ${this.#token}` },
+    });
   }
 
   /**
@@ -55,7 +89,7 @@ export class HttpRegistryClient {
   async publishRelease(release) {
     const { namespace, slug } = splitProduct(release.manifest.product.id);
     const version = release.manifest.product.version;
-    const res = await this.fetch(
+    const res = await this.request(
       `${this.baseUrl}/v1/releases/${encodeURIComponent(`${namespace}/${slug}`)}/${encodeURIComponent(version)}`,
       {
         method: 'PUT',
@@ -78,7 +112,7 @@ export class HttpRegistryClient {
     const { namespace, slug } = splitProduct(releaseId.slice(0, at));
     const version = releaseId.slice(at + 1);
 
-    const res = await this.fetch(
+    const res = await this.request(
       `${this.baseUrl}/v1/releases/${encodeURIComponent(`${namespace}/${slug}`)}/${encodeURIComponent(version)}`,
     );
     if (res.status === 404) return null;
@@ -98,7 +132,7 @@ export class HttpRegistryClient {
    */
   async listReleases(productId) {
     const { namespace, slug } = splitProduct(productId);
-    const res = await this.fetch(
+    const res = await this.request(
       `${this.baseUrl}/v1/releases/${encodeURIComponent(`${namespace}/${slug}`)}`,
     );
     if (res.status === 404) return [];
@@ -126,7 +160,7 @@ export class HttpRegistryClient {
     if (typeof publisherId !== 'string') {
       throw new ProtocolError(ErrorCode.INVALID_PUBLISHER_DOCUMENT, 'document declares no publisher', {});
     }
-    const res = await this.fetch(`${this.baseUrl}/v1/publishers/${encodeURIComponent(namespaceOf(publisherId))}`, {
+    const res = await this.request(`${this.baseUrl}/v1/publishers/${encodeURIComponent(namespaceOf(publisherId))}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(envelope),
@@ -145,7 +179,7 @@ export class HttpRegistryClient {
    * @param {string} publisherId
    */
   async getPublisher(publisherId) {
-    const res = await this.fetch(`${this.baseUrl}/v1/publishers/${encodeURIComponent(namespaceOf(publisherId))}`);
+    const res = await this.request(`${this.baseUrl}/v1/publishers/${encodeURIComponent(namespaceOf(publisherId))}`);
     if (res.status === 404) return null;
     if (!res.ok) throw await toError(res);
     return res.json();
@@ -156,7 +190,7 @@ export class HttpRegistryClient {
    * @param {string} publisherId
    */
   async listPublisherDocuments(publisherId) {
-    const res = await this.fetch(
+    const res = await this.request(
       `${this.baseUrl}/v1/publishers/${encodeURIComponent(namespaceOf(publisherId))}/documents`,
     );
     if (res.status === 404) return [];
@@ -170,7 +204,7 @@ export class HttpRegistryClient {
    * @param {string} digest
    */
   async getArtifact(digest) {
-    const res = await this.fetch(`${this.baseUrl}/v1/artifacts/${encodeURIComponent(digest)}`);
+    const res = await this.request(`${this.baseUrl}/v1/artifacts/${encodeURIComponent(digest)}`);
     if (res.status === 404) return null;
     if (!res.ok) throw await toError(res);
     return res.json();
@@ -207,7 +241,7 @@ export class HttpRegistryClient {
       init.duplex = 'half';
       if (typeof size === 'number') init.headers['content-length'] = String(size);
     }
-    const res = await this.fetch(`${this.baseUrl}/v1/artifacts/${encodeURIComponent(digest)}/content`, init);
+    const res = await this.request(`${this.baseUrl}/v1/artifacts/${encodeURIComponent(digest)}/content`, init);
     if (!res.ok) throw await toError(res);
     return res.json();
   }
@@ -230,7 +264,7 @@ export class HttpRegistryClient {
    * @returns {Promise<{size: number|null, stream: AsyncIterable<Uint8Array>}>}
    */
   async openArtifact(digest) {
-    const res = await this.fetch(`${this.baseUrl}/v1/artifacts/${encodeURIComponent(digest)}/content`);
+    const res = await this.request(`${this.baseUrl}/v1/artifacts/${encodeURIComponent(digest)}/content`);
     if (res.status === 404) {
       await res.body?.cancel().catch(() => {});
       throw new ArtifactNotFoundError(`registry has no bytes for ${digest}`, { digest });

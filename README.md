@@ -87,8 +87,9 @@ only `node:crypto`, and the CLI only `node:fs` and `node:http`.
 
 ## Quick start
 
-Publish a real artifact to a local HTTP registry, then download and verify it as
-a separate consumer. Run this from the repository root (after `npm install`).
+Run a registry that requires credentials, publish a signed artifact to it as its
+owner, then acquire and verify it as an anonymous consumer. Run this from the
+repository root (after `npm install`).
 
 <!-- quickstart:start -->
 ```bash
@@ -103,28 +104,50 @@ mkdir dist
 printf hello > dist/widget-macos-arm64     # file name = the artifact id
 printf hello > dist/widget-linux-x64
 
-# 2. Generate a publisher key pair, then sign the release.
-$D keygen --out publisher.pem
-$D release sign "$REPO/examples/widget.manifest.json" --key publisher.pem --out release.json
-$D release verify release.json
+# 2. The registry OPERATOR issues a credential for the namespace "acme".
+#    It is printed once (only a hash is kept) and grants writes to acme only.
+ACME_TOKEN=$($D registry token create --dir ./registry --namespace acme --expires-in 30d)
 
-# 3. Start a local registry (no authentication — keep it on localhost).
+# 3. Start the registry. Authentication is on by default; reads stay public.
 $D serve --dir ./registry --port "$PORT" > serve.log 2>&1 &
 SERVER=$!
-until grep -q listening serve.log; do sleep 0.1; done
+until grep -q listening serve.log; do
+  kill -0 $SERVER 2>/dev/null || { cat serve.log; exit 1; }   # it failed to start
+  sleep 0.1
+done
 REGISTRY=http://127.0.0.1:$PORT
 
-# 4. Publish: upload each artifact by digest, then publish the signed release.
+# 4. The PUBLISHER makes a key, claims the namespace, signs and publishes.
+#    The credential comes from the environment, never from a command-line value.
+$D publisher create publisher://acme --out publisher.pem --document publisher.json
+export DISTRIBUTION_TOKEN=$ACME_TOKEN
+$D publisher publish publisher.json --registry "$REGISTRY"
+$D release sign "$REPO/examples/widget.manifest.json" \
+  --key publisher.pem --key-id key-1 --publisher-document publisher.json --out release.json
 $D publish release.json --registry "$REGISTRY" --artifacts dist
 
-# 5. As a consumer: resolve, then download by digest and verify.
+# 5. A CONSUMER needs no credential: resolve, then download by digest and verify.
+unset DISTRIBUTION_TOKEN
 $D resolve product://acme/widget --os linux --arch x64 --registry "$REGISTRY"
 $D acquire product://acme/widget@1.2.0 --registry "$REGISTRY" \
   --os linux --arch x64 --out widget --receipt receipt.json
 cat widget; echo
-cat receipt.json
 
-# 6. The registry is not trusted. Corrupt the stored bytes and try again:
+# 6. What the registry refuses.
+#    No credential:
+if $D publish release.json --registry "$REGISTRY"; then echo "UNEXPECTED: accepted"; exit 1; fi
+#    A credential for another namespace:
+EVIL_TOKEN=$($D registry token create --dir ./registry --namespace evil 2>/dev/null)
+if DISTRIBUTION_TOKEN=$EVIL_TOKEN $D publish release.json --registry "$REGISTRY"; then
+  echo "UNEXPECTED: accepted"; exit 1
+fi
+#    A valid credential for acme, but not the owner's key: no takeover.
+$D publisher create publisher://acme --out thief.pem --document thief.json --key-id thief
+if DISTRIBUTION_TOKEN=$ACME_TOKEN $D publisher publish thief.json --registry "$REGISTRY"; then
+  echo "UNEXPECTED: takeover accepted"; exit 1
+fi
+
+# 7. The registry is still not trusted for the bytes. Corrupt the stored artifact:
 #    verification fails, and nothing is written.
 printf HELLO > registry/artifacts/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin
 if $D acquire product://acme/widget@1.2.0 --registry "$REGISTRY" \
@@ -137,8 +160,16 @@ kill $SERVER
 ```
 <!-- quickstart:end -->
 
-Without a server, `--registry ./registry` uses a plain directory as the
-registry; every command above works the same way.
+Two separate questions are answered separately. **Credentials** decide who may
+write to *this registry*, and which namespace they may write to; they appear in no
+signed object. **Signatures** decide who vouches for a release, and a namespace
+is owned by the keys in its publisher document, which only an existing owner key
+can hand on. A registry cannot make a publisher identity true; consumers still
+verify everything. See [`spec/registry-auth.md`](spec/registry-auth.md).
+
+For local experiments, `serve --insecure-no-auth` turns authentication off (on
+loopback only), and `--registry ./registry` uses a plain directory as a registry
+with no server at all.
 
 The signed release names the artifact by digest and size only. **Where** the
 bytes live is the consumer's choice (here, the registry's
@@ -202,6 +233,7 @@ complete check.
 | [`spec/protocol.md`](spec/protocol.md) | The model, the rules, the non-goals |
 | [`spec/canonicalization.md`](spec/canonicalization.md) | Byte-exact serialization rules |
 | [`spec/registry-api.md`](spec/registry-api.md) | The HTTP mapping, including digest-addressed artifact upload and download |
+| [`spec/registry-auth.md`](spec/registry-auth.md) | Registry credentials, namespace ownership and key continuity |
 | [`spec/conformance.md`](spec/conformance.md) | How to prove conformance |
 | [`spec/manifest.schema.json`](spec/manifest.schema.json) | The manifest contract (generated) |
 

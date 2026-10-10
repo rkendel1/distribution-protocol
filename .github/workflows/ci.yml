@@ -2,15 +2,18 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
     branches: [master]
 
 permissions:
   contents: read
 
+# Supersede stale PR runs, but never cancel a run on a pushed commit: a merge
+# commit on the default branch must finish so it has a complete result of its own.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

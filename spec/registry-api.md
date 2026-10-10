@@ -7,6 +7,47 @@ The reference implementation is
 [`http.mjs`](../packages/registry/src/http.mjs); the matching client is
 [`http-client.mjs`](../packages/registry/src/http-client.mjs).
 
+## Authentication and authorization
+
+Write routes require a credential. The full model — token format, namespace
+grants, ownership rules, failure semantics and what each guarantees — is in
+[`registry-auth.md`](./registry-auth.md); the wire summary is here.
+
+```
+Authorization: Bearer dpt_<id>.<secret>
+```
+
+| Route | Credential | Must grant |
+| --- | --- | --- |
+| `PUT /v1/releases/{product}/{version}` | required | the namespace of the release |
+| `PUT /v1/publishers/{publisher}` | required | the namespace of the publisher |
+| `PUT /v1/artifacts/{digest}/content` | required | any namespace (write access) |
+| every `GET`, `HEAD` and `POST /v1/resolve` | none by default | — |
+
+- Credentials are checked **before** the request body is read.
+- A release's path (`{product}`, `{version}`) MUST match the release in the body
+  (`400 BAD_REQUEST`); authorization is judged on the namespace they name.
+- Releases and publisher documents are never edited or deleted: other methods on
+  those routes are `405`.
+- A registry MAY require a credential for reads too (any valid credential
+  suffices, including a read-only one).
+- Credentials are read **only** from the `Authorization` header — never a query
+  string — and never appear in a response, error or log.
+
+Authentication and ownership failures:
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `401` | `AUTHENTICATION_REQUIRED` | no credential was sent |
+| `401` | `INVALID_CREDENTIALS` | malformed, unknown, wrong secret, or revoked (one body for all) |
+| `401` | `CREDENTIALS_EXPIRED` | correct secret, past its expiry |
+| `403` | `FORBIDDEN` | authenticated, but no write grant for this namespace |
+| `403` | `OWNERSHIP_VIOLATION` | a publisher document not authorized by the namespace's current keys |
+| `403` | `UNKNOWN_PUBLISHER_KEY` / `KEY_REVOKED` | a release signed by a key the namespace does not declare / may no longer use |
+| `409` | `NAMESPACE_UNCLAIMED` | a release for a namespace with no publisher document |
+
+Every `401` carries `WWW-Authenticate: Bearer realm="distribution-registry"`.
+
 ## Identity in paths
 
 A release id is `product://<namespace>/<slug>@<version>`. In a path, the
@@ -205,6 +246,9 @@ Clients branch on `code`, never on message text.
 | `RELEASE_NOT_FOUND` | 404 |
 | `ARTIFACT_NOT_FOUND` | 404 |
 | `RELEASE_CONFLICT` | 409 |
+| `AUTHENTICATION_REQUIRED` · `INVALID_CREDENTIALS` · `CREDENTIALS_EXPIRED` | 401 |
+| `FORBIDDEN` · `OWNERSHIP_VIOLATION` · `KEY_REVOKED` | 403 |
+| `NAMESPACE_UNCLAIMED` · `PUBLISHER_CONFLICT` | 409 |
 | `DIGEST_MISMATCH` | 422 |
 | `ARTIFACT_TOO_LARGE` | 413 |
 | `ARTIFACT_STORAGE_UNSUPPORTED` | 501 |
@@ -233,10 +277,15 @@ altered bytes).
 The reference server is `distribution serve`:
 
 ```bash
-distribution serve --dir ./registry --port 8787
+distribution registry token create --dir ./registry --namespace acme   # a credential
+distribution serve --dir ./registry --port 8787                         # auth is on
 ```
 
-It binds to `127.0.0.1` by default and has **no authentication**: anyone who can
-reach it can upload. Do not expose it to an untrusted network without a gateway
-that authenticates writes. Authentication and publisher-namespace ownership are
-deliberately outside this version of the API.
+Authentication is **on by default**. `--insecure-no-auth` turns it off for local
+experiments and is refused on any non-loopback host. The server speaks plain
+HTTP: terminate TLS in front of it before exposing it, because a bearer token
+over cleartext HTTP is a leaked token (the reference client refuses to send one
+to a non-loopback `http://` host).
+
+Operating guidance, ownership rules and the limits of this layer are in
+[`registry-auth.md`](./registry-auth.md).

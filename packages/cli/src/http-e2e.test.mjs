@@ -42,9 +42,15 @@ async function cli(args, { cwd } = {}) {
   }
 }
 
-/** Start `distribution serve` as a real subprocess and return its URL. */
+/**
+ * Start `distribution serve` as a real subprocess and return its URL.
+ *
+ * These tests are about distribution (bytes, digests, hostile registries), not
+ * authorization, so they run the server in its explicit open mode. The
+ * authenticated flow has its own end-to-end tests in auth-e2e.test.mjs.
+ */
 async function startRegistry(t, dir, extraArgs = []) {
-  const child = spawn(process.execPath, [BIN, 'serve', '--dir', dir, '--port', '0', ...extraArgs], {
+  const child = spawn(process.execPath, [BIN, 'serve', '--dir', dir, '--port', '0', '--insecure-no-auth', ...extraArgs], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stderr = '';
