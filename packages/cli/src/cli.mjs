@@ -43,6 +43,10 @@ import {
   TransportRegistry,
   receiptFromAcquisition,
   verifyAcquisitionTrust,
+  BindingScheme,
+  BindingOutcome,
+  checkArtifactBinding,
+  isValidBindingValue,
   resolvePublisher,
   validateManifest,
   parseProductId,
@@ -87,12 +91,17 @@ const USAGE = `distribution — a client for the Distribution Protocol
   resolve <product-id> --os <os> --arch <arch> [--capability <c>]
                                     resolve for a target
   acquire <release-id> --registry <url> --out <file> [--os <os> --arch <arch>] [--receipt <file>] [--trust <file>] [--allow-untrusted]
+        [--expect-appboundry-identity sha256:<hex>]
                                     download an artifact by digest and verify it:
                                     digest (bytes = signed digest), signature (key signed
                                     the release) AND publisher trust (publisher anchored
                                     in the trust store, key not revoked). Trust is
                                     REQUIRED; failure exits 1 and writes nothing.
                                     --allow-untrusted skips trust only; it is reported.
+                                    --expect-appboundry-identity requires the SIGNED release
+                                    to bind the artifact to that package identity (checked
+                                    before any bytes are fetched). The artifact digest is a
+                                    different value and is never used as the identity.
   serve --dir <path> [--port 8787] [--host 127.0.0.1] [--max-artifact-size <bytes>]
         [--tokens <file>] [--require-auth-for-read] [--insecure-no-auth]
                                     run an HTTP registry; writes need a credential
@@ -454,6 +463,16 @@ async function runAcquire(positional, flags) {
     return fail('--allow-untrusted takes no value (put it after the release id)');
   }
 
+  // Optional identity expectation. It is a consumer requirement, supplied out
+  // of band, and never inferred from the release being checked.
+  const expectedAppBoundry = flags['expect-appboundry-identity'];
+  if (
+    expectedAppBoundry !== undefined &&
+    !isValidBindingValue(BindingScheme.APPBOUNDRY_PACKAGE_IDENTITY, expectedAppBoundry)
+  ) {
+    return fail('--expect-appboundry-identity requires a package identity of the form sha256:<64 hex digits>');
+  }
+
   const registry = await openRegistry(flags);
   // A valid signature proves the signer HOLDS a key, not that anyone should
   // believe them; publisher trust is evaluated separately below.
@@ -477,6 +496,28 @@ async function runAcquire(positional, flags) {
     return fail(`no artifact to acquire: ${resolution.reason ?? 'unknown'}`);
   }
   const artifact = resolution.artifact;
+
+  // IDENTITY BINDING (only when the consumer requires one). The binding is read
+  // from the signed manifest, so it cannot have been altered after signing, and
+  // it is compared BEFORE any bytes are fetched: a substituted package never
+  // reaches the destination. This is separate from the artifact digest below.
+  let identityBinding = null;
+  if (expectedAppBoundry !== undefined) {
+    const binding = checkArtifactBinding({
+      release,
+      artifactId: artifact.id,
+      scheme: BindingScheme.APPBOUNDRY_PACKAGE_IDENTITY,
+      expected: expectedAppBoundry,
+    });
+    if (binding.outcome !== BindingOutcome.VERIFIED) {
+      return fail(
+        `IDENTITY FAILURE [${binding.outcome}] — refusing to acquire ${artifact.id}.\n` +
+          `  ${binding.reason}\n` +
+          '  The artifact digest is not a package identity and was not used as one. Nothing was written.',
+      );
+    }
+    identityBinding = { scheme: binding.scheme, value: binding.actual };
+  }
 
   // 1. INTEGRITY. The location is derived from the signed digest and names no
   // host. Whatever the registry streams back is hashed and must equal that
@@ -517,9 +558,14 @@ async function runAcquire(positional, flags) {
       ...(trust.publisherDocument ? { publisherDocument: trust.publisherDocument } : {}),
     };
   }
+  if (identityBinding) verification = { ...verification, identityBinding };
   const trustLine = allowUntrusted
     ? 'publisher trust NOT evaluated (--allow-untrusted): integrity and signature only'
     : `publisher ${release.manifest.publisher.id} trusted (${verification.trustAnchor}), key ${release.signature.keyId} not revoked`;
+
+  const identityLine = identityBinding
+    ? `identity ${identityBinding.scheme} ${identityBinding.value}  (signed binding matches the expected identity; the loader must still recompute it from the bytes)`
+    : '';
 
   // 6. COMMIT. The file appears only when complete and only after every check.
   if (flags.out && flags.out !== true) {
@@ -534,10 +580,12 @@ async function runAcquire(positional, flags) {
     out(`acquired ${result.bytes.length} bytes`);
     out(`digest   ${artifact.digest}  (verified)`);
     out(`trust    ${trustLine}`);
+    if (identityBinding) out(identityLine);
     out(`written  ${flags.out}`);
   } else {
     out(`digest   ${artifact.digest}  (verified, ${result.bytes.length} bytes)`);
     out(`trust    ${trustLine}`);
+    if (identityBinding) out(identityLine);
   }
 
   if (flags.receipt && flags.receipt !== true) {

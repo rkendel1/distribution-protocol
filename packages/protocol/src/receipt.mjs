@@ -41,9 +41,12 @@
  * @property {'checked'|'not-checked'} revocation
  * @property {'document'|'key-pin'} [trustAnchor]
  * @property {string} [publisherDocument]
+ * @property {{scheme: string, value: string}} [identityBinding] present only when the
+ *   consumer required, and the signed release satisfied, an identity binding
  */
 
 import { ReceiptError } from './errors.mjs';
+import { isValidBindingValue } from './schema.mjs';
 
 /** The `type` discriminator every receipt carries. */
 export const RECEIPT_TYPE = 'distribution/receipt';
@@ -185,6 +188,12 @@ function validateVerification(v) {
   }
   if (v.publisherTrust === 'verified' && !['document', 'key-pin'].includes(v.trustAnchor)) {
     errors.push('verification claims publisher trust without a trust anchor');
+  }
+  if (v.identityBinding !== undefined) {
+    const b = v.identityBinding;
+    if (b === null || typeof b !== 'object' || typeof b.scheme !== 'string' || !isValidBindingValue(b.scheme, b.value)) {
+      errors.push('verification.identityBinding must be {scheme, value} with a well-formed value');
+    }
   }
   if (v.publisherTrust === 'not-evaluated' && (v.trustAnchor !== undefined || v.revocation === 'checked')) {
     errors.push('verification reports trust detail although publisher trust was not evaluated');
