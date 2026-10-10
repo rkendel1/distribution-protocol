@@ -1,0 +1,21 @@
+
+> appport-monorepo@1.0.0 build /home/user/appboundry
+> tsc -b tsconfig.build.json
+
+packages/appboundry/src/composition.ts(5,3): error TS2305: Module '"@appport/core"' has no exported member 'APPPORT_APPLICATION_PACKAGE_ARTIFACT_FILE'.
+packages/appboundry/src/composition.ts(6,3): error TS2305: Module '"@appport/core"' has no exported member 'APPPORT_APPLICATION_PACKAGE_MANIFEST_FILE'.
+packages/appboundry/src/composition.ts(11,3): error TS2305: Module '"@appport/core"' has no exported member 'resolveApplicationPackageMetadata'.
+packages/appboundry/src/composition.ts(13,8): error TS2305: Module '"@appport/core"' has no exported member 'AppBoundryRequestContext'.
+packages/appboundry/src/composition.ts(339,51): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+packages/appboundry/src/composition.ts(340,51): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+packages/appboundry/src/composition.ts(427,63): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+packages/appboundry/src/composition.ts(428,63): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+packages/appboundry/src/index.ts(6,3): error TS2305: Module '"@appport/core"' has no exported member 'APPPORT_APPLICATION_PACKAGE_ARTIFACT_FILE'.
+packages/appboundry/src/index.ts(7,3): error TS2305: Module '"@appport/core"' has no exported member 'APPPORT_APPLICATION_PACKAGE_MANIFEST_FILE'.
+packages/appboundry/src/index.ts(8,3): error TS2305: Module '"@appport/core"' has no exported member 'APPPORT_APPLICATION_PACKAGE_PROTOCOL'.
+packages/appboundry/src/index.ts(9,3): error TS2724: '"@appport/core"' has no exported member named 'createApplicationPackage'. Did you mean 'createApplication'?
+packages/appboundry/src/index.ts(10,3): error TS2305: Module '"@appport/core"' has no exported member 'resolveApplicationPackageMetadata'.
+packages/appboundry/src/index.ts(11,8): error TS2305: Module '"@appport/core"' has no exported member 'AppPortApplicationPackageManifest'.
+packages/appboundry/src/index.ts(305,53): error TS7006: Parameter 'capability' implicitly has an 'any' type.
+packages/appboundry/src/index.ts(310,53): error TS7006: Parameter 'capability' implicitly has an 'any' type.
+ ELIFECYCLE  Command failed with exit code 1.
