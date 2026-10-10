@@ -42,6 +42,8 @@ import {
   AcquisitionOutcome,
   TransportRegistry,
   receiptFromAcquisition,
+  verifyAcquisitionTrust,
+  resolvePublisher,
   validateManifest,
   parseProductId,
   exportPublicKey,
@@ -84,8 +86,13 @@ const USAGE = `distribution — a client for the Distribution Protocol
   get <release-id> --registry <url> fetch a release
   resolve <product-id> --os <os> --arch <arch> [--capability <c>]
                                     resolve for a target
-  acquire <release-id> --registry <url> --out <file> [--os <os> --arch <arch>] [--receipt <file>]
-                                    download an artifact by digest and verify it
+  acquire <release-id> --registry <url> --out <file> [--os <os> --arch <arch>] [--receipt <file>] [--trust <file>] [--allow-untrusted]
+                                    download an artifact by digest and verify it:
+                                    digest (bytes = signed digest), signature (key signed
+                                    the release) AND publisher trust (publisher anchored
+                                    in the trust store, key not revoked). Trust is
+                                    REQUIRED; failure exits 1 and writes nothing.
+                                    --allow-untrusted skips trust only; it is reported.
   serve --dir <path> [--port 8787] [--host 127.0.0.1] [--max-artifact-size <bytes>]
         [--tokens <file>] [--require-auth-for-read] [--insecure-no-auth]
                                     run an HTTP registry; writes need a credential
@@ -101,7 +108,8 @@ const USAGE = `distribution — a client for the Distribution Protocol
 Credentials: set DISTRIBUTION_TOKEN or pass --token-file <path>. A token is never
 accepted as a command-line value. Sent only over https:// or to localhost unless
 --allow-insecure-http.
-  receipt <release-id>              print an acquisition receipt
+  receipt <release-id>              print a release receipt (makes no verification claim;
+                                    use acquire --receipt for a verified one)
   keygen                            generate a publisher key pair
 
 Exit codes: 0 success, 1 failure, 2 usage error.`;
@@ -439,9 +447,17 @@ async function runAcquire(positional, flags) {
   const releaseId = positional[0];
   if (!releaseId) return fail('usage: distribution acquire <release-id> --registry <url> --out <file>');
 
+  // Trusted acquisition is the default. The only way out is an explicit,
+  // visible flag; a malformed value is a usage error, never a silent opt-out.
+  const allowUntrusted = flags['allow-untrusted'] === true;
+  if (flags['allow-untrusted'] !== undefined && !allowUntrusted) {
+    return fail('--allow-untrusted takes no value (put it after the release id)');
+  }
+
   const registry = await openRegistry(flags);
-  // `getRelease` verifies the publisher's signature, so everything below is
-  // derived from signed data and not from anything the registry merely says.
+  // `getRelease` verifies the release signature against the key it carries.
+  // That proves the signer HOLDS a key, not that anyone should believe them;
+  // publisher trust is evaluated separately below.
   const release = await registry.getRelease(releaseId);
   if (!release) return fail(`release not found: ${releaseId}`);
 
@@ -455,8 +471,9 @@ async function runAcquire(positional, flags) {
   }
   const artifact = resolution.artifact;
 
-  // The location is derived from the signed digest and names no host. Whatever
-  // the registry streams back is hashed and must equal that digest.
+  // 1. INTEGRITY. The location is derived from the signed digest and names no
+  // host. Whatever the registry streams back is hashed and must equal that
+  // digest. Bytes stay in memory; nothing touches the destination yet.
   const transports = new TransportRegistry().register(registryTransport(registry));
   const result = await acquireArtifact(
     { digest: artifact.digest, size: artifact.size, sources: [{ uri: `registry://${artifact.digest}` }] },
@@ -470,8 +487,34 @@ async function runAcquire(positional, flags) {
     return fail(`${prefix}could not acquire ${artifact.id} (${artifact.digest}): ${result.reason}`);
   }
 
-  // Nothing is written until the bytes are verified, and the file appears only
-  // when it is complete.
+  // 2-5. SIGNATURE (done by getRelease), then SIGNER IDENTITY, PUBLISHER TRUST
+  // and REVOCATION. Any failure — including being unable to evaluate trust —
+  // aborts before the destination or a receipt is touched.
+  let verification = { digest: 'verified', signature: 'verified', publisherTrust: 'not-evaluated', revocation: 'not-checked' };
+  if (!allowUntrusted) {
+    const trust = await evaluateAcquisitionTrust({ release, registry, flags });
+    if (trust.outcome !== TrustOutcome.VALID) {
+      return fail(
+        `TRUST FAILURE [${trust.outcome}] — refusing to acquire ${artifact.id}.\n` +
+          `  publisher ${trust.publisher ?? 'unknown'}, key ${trust.keyId ?? 'unknown'}\n` +
+          `  ${trust.reason}\n` +
+          '  The bytes and signature may be valid, but the publisher is not trusted by this consumer. Nothing was written.',
+      );
+    }
+    verification = {
+      digest: 'verified',
+      signature: 'verified',
+      publisherTrust: 'verified',
+      revocation: trust.revocationChecked ? 'checked' : 'not-checked',
+      trustAnchor: trust.anchor,
+      ...(trust.publisherDocument ? { publisherDocument: trust.publisherDocument } : {}),
+    };
+  }
+  const trustLine = allowUntrusted
+    ? 'publisher trust NOT evaluated (--allow-untrusted): integrity and signature only'
+    : `publisher ${release.manifest.publisher.id} trusted (${verification.trustAnchor}), key ${release.signature.keyId} not revoked`;
+
+  // 6. COMMIT. The file appears only when complete and only after every check.
   if (flags.out && flags.out !== true) {
     const partial = `${flags.out}.partial`;
     try {
@@ -483,23 +526,59 @@ async function runAcquire(positional, flags) {
     }
     out(`acquired ${result.bytes.length} bytes`);
     out(`digest   ${artifact.digest}  (verified)`);
+    out(`trust    ${trustLine}`);
     out(`written  ${flags.out}`);
   } else {
     out(`digest   ${artifact.digest}  (verified, ${result.bytes.length} bytes)`);
+    out(`trust    ${trustLine}`);
   }
 
   if (flags.receipt && flags.receipt !== true) {
-    // A receipt is evidence of a VERIFIED acquisition, so it is only ever
-    // issued here, after the digest check above passed.
+    // A receipt is evidence of what was ACTUALLY checked, issued only after
+    // every enabled check passed.
     const receipt = receiptFromAcquisition({
       release,
       artifact,
       timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      verification,
     });
     await writeFile(flags.receipt, `${JSON.stringify(receipt, null, 2)}\n`);
     out(`receipt  ${flags.receipt}`);
   }
   return 0;
+}
+
+/**
+ * Evaluate publisher trust for an acquisition. Never throws: a missing,
+ * unreadable or malformed trust store, an unreachable publisher document, or
+ * any other error yields a denial, never acceptance.
+ */
+async function evaluateAcquisitionTrust({ release, registry, flags }) {
+  const publisher = release.manifest.publisher.id;
+  const base = { publisher, keyId: release.signature?.keyId ?? null, revocationChecked: false };
+  let policy;
+  try {
+    policy = await policyFromFlags(flags);
+  } catch (err) {
+    return {
+      ...base,
+      outcome: TrustOutcome.INVALID_PUBLISHER_DOCUMENT,
+      reason: `trust store could not be read (${err.message}). Fix or recreate it with \`distribution trust add\`, or pass --trust <file>.`,
+    };
+  }
+  const found = await resolvePublisher({ publisher, registry });
+  if (!found.found) {
+    return {
+      ...base,
+      outcome: TrustOutcome.PUBLISHER_NOT_FOUND,
+      reason: `the registry has no publisher document for ${publisher}${found.reason ? ` (${found.reason})` : ''}, so its key status cannot be checked`,
+    };
+  }
+  const verdict = verifyAcquisitionTrust({ release, documents: found.documents, policy });
+  if (verdict.outcome === TrustOutcome.UNKNOWN_PUBLISHER) {
+    verdict.reason += `. Trust it deliberately with \`distribution trust add ${publisher} --publisher-document <doc.json>\`, or pass --allow-untrusted to accept integrity and signature only.`;
+  }
+  return verdict;
 }
 
 /**
@@ -642,6 +721,8 @@ async function runReceipt(positional, flags) {
     // RFC 3339 with whole seconds keeps the receipt byte-stable in shape.
     timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
   });
+  // This command acquires nothing, so its receipt carries no `verification`
+  // block and therefore claims neither digest, signature nor trust checks.
   process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
   return 0;
 }

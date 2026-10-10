@@ -20,6 +20,27 @@
  * @property {string} publisher  publisher id
  * @property {string} timestamp  RFC 3339 UTC instant
  * @property {string} keyId      publisher key that signed the release
+ * @property {Verification} [verification] which checks actually ran (see below)
+ *
+ * `verification` is the receipt's honesty clause. It separates three claims
+ * that are easy to conflate:
+ *
+ *   digest          bytes matched the digest the release signed
+ *   signature       the release signature verified against its declared key
+ *   publisherTrust  'verified' only when the consumer's trust policy accepted
+ *                   the publisher; otherwise 'not-evaluated'
+ *   revocation      'checked' only when the publisher's key status was
+ *                   consulted; otherwise 'not-checked'
+ *
+ * A receipt without `verification` (older receipts) makes NO trust claim.
+ *
+ * @typedef {object} Verification
+ * @property {'verified'} digest
+ * @property {'verified'} signature
+ * @property {'verified'|'not-evaluated'} publisherTrust
+ * @property {'checked'|'not-checked'} revocation
+ * @property {'document'|'key-pin'} [trustAnchor]
+ * @property {string} [publisherDocument]
  */
 
 import { ReceiptError } from './errors.mjs';
@@ -42,7 +63,7 @@ const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
  * @param {string} [params.keyId]   signing key id, when known
  * @returns {Receipt}
  */
-export function createReceipt({ product, release, artifact, publisher, timestamp, keyId }) {
+export function createReceipt({ product, release, artifact, publisher, timestamp, keyId, verification }) {
   if (!TIMESTAMP_RE.test(String(timestamp))) {
     throw new ReceiptError(`timestamp must be RFC 3339 UTC, got ${JSON.stringify(timestamp)}`, { timestamp });
   }
@@ -54,6 +75,7 @@ export function createReceipt({ product, release, artifact, publisher, timestamp
     publisher,
     timestamp,
     ...(keyId ? { keyId } : {}),
+    ...(verification ? { verification: { ...verification } } : {}),
   };
 }
 
@@ -71,7 +93,7 @@ export function createReceipt({ product, release, artifact, publisher, timestamp
  * @param {string} params.timestamp RFC 3339 UTC instant
  * @returns {Receipt}
  */
-export function receiptFromAcquisition({ release, artifact, timestamp }) {
+export function receiptFromAcquisition({ release, artifact, timestamp, verification }) {
   const manifest = release?.manifest;
   if (!manifest) throw new ReceiptError('a release envelope is required', {});
   return createReceipt({
@@ -81,6 +103,7 @@ export function receiptFromAcquisition({ release, artifact, timestamp }) {
     publisher: manifest.publisher.id,
     timestamp,
     keyId: release.signature?.keyId,
+    verification,
   });
 }
 
@@ -112,6 +135,8 @@ export function validateReceipt(receipt, { release } = {}) {
     errors.push('artifact must be a sha256 digest');
   }
 
+  if (receipt?.verification !== undefined) errors.push(...validateVerification(receipt.verification));
+
   // The release id must belong to the product it names.
   if (!errors.includes('release must be a non-empty string') && receipt.release.startsWith('product://')) {
     const at = receipt.release.lastIndexOf('@');
@@ -141,4 +166,28 @@ export function validateReceipt(receipt, { release } = {}) {
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+/** A receipt may not claim trust or revocation checks that its own fields contradict. */
+function validateVerification(v) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return ['verification must be an object'];
+  const errors = [];
+  if (v.digest !== 'verified') errors.push('verification.digest must be "verified"');
+  if (v.signature !== 'verified') errors.push('verification.signature must be "verified"');
+  if (!['verified', 'not-evaluated'].includes(v.publisherTrust)) {
+    errors.push('verification.publisherTrust must be "verified" or "not-evaluated"');
+  }
+  if (!['checked', 'not-checked'].includes(v.revocation)) {
+    errors.push('verification.revocation must be "checked" or "not-checked"');
+  }
+  if (v.publisherTrust === 'verified' && v.revocation !== 'checked') {
+    errors.push('verification claims publisher trust without a revocation check');
+  }
+  if (v.publisherTrust === 'verified' && !['document', 'key-pin'].includes(v.trustAnchor)) {
+    errors.push('verification claims publisher trust without a trust anchor');
+  }
+  if (v.publisherTrust === 'not-evaluated' && (v.trustAnchor !== undefined || v.revocation === 'checked')) {
+    errors.push('verification reports trust detail although publisher trust was not evaluated');
+  }
+  return errors;
 }

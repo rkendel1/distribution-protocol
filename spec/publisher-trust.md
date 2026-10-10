@@ -283,6 +283,40 @@ publisher is trusted.
 Returns `{allowed, outcome, reason}`. Refuses `revoked`, `rotated`, and
 `expired` keys.
 
+### 6.4 `verifyAcquisitionTrust({release, documents, policy})`
+
+The decision `distribution acquire` makes before committing an artifact. It
+composes the primitives above and returns `{outcome, reason, publisher, keyId,
+anchor, publisherDocument, headDocument, revocationChecked}`; nothing but a full
+pass returns `VALID`, and it never throws (an evaluation error is a denial).
+
+`verifyPublisherAt` alone is not enough for acquisition, for two reasons:
+
+- **Identity is not an anchor.** Anyone can self-sign a document for any
+  `publisher://` id, so a policy that lists only the id would accept an
+  attacker's look-alike (the failure demonstrated by the AppBoundry spike). The
+  policy MUST also anchor the publisher: a document id recorded by
+  `trust add --publisher-document` that the presented, fully verified lineage
+  contains, and/or a pinned key (`id` + fingerprint) matching the signing key.
+  Otherwise the outcome is `UNANCHORED_PUBLISHER` (or `UNKNOWN_KEY` for a pin
+  mismatch). Pins and anchors are both enforced when both are present.
+- **Historical validity is not current validity.** `verifyPublisherAt` judges the
+  key by the document that authorized the release, so a later revocation is
+  invisible to it. Acquisition additionally refuses a key that the lineage head
+  marks `revoked` (`KEY_REVOKED`, `revocationChecked: true`). Rotated keys stay
+  acceptable for releases they signed.
+
+Checks, in order: publisher in policy (`UNKNOWN_PUBLISHER`); documents retrieved
+(`PUBLISHER_NOT_FOUND`); lineage valid, contiguous and key-continuous
+(`INVALID_PUBLISHER_SIGNATURE`); lineage describes the release's publisher
+(`IDENTITY_MISMATCH`); anchor present and matched (`UNANCHORED_PUBLISHER`,
+`UNKNOWN_KEY`); `verifyPublisherAt` (§6.1 outcomes); head revocation
+(`KEY_REVOKED`).
+
+Known limit: the lineage is whatever the consumer's registry serves, so a
+registry that withholds a newer document can hide a later revocation
+(freeze/rollback). Consult more than one registry for stronger guarantees.
+
 ---
 
 ## 7. Key Rotation
@@ -345,7 +379,9 @@ state:
 
 ```
 distribution trust list
-distribution trust add <publisher-id> [--key-id <id>] [--public-key <file>]
+distribution trust add <publisher-id> --publisher-document <doc.json>   # anchor (recommended)
+distribution trust add <publisher-id> --key-id <id> --public-key <file>  # pin a key
+distribution acquire <release-id> --registry <url> --out <file> [--allow-untrusted]
 distribution trust remove <publisher-id>
 distribution trust show <publisher-id>
 distribution trust path
@@ -358,6 +394,15 @@ distribution publisher verify <publisher-id> [--file <doc.json>]
 ```
 
 All commands accept `--trust <path>` to override the trust store location.
+
+`distribution acquire` enforces §6.4 by default. `trust add <id>` with neither a
+document nor a key records trust by name only, which acquire refuses
+(`UNANCHORED_PUBLISHER`). A missing, unreadable or malformed trust store, an
+unreachable publisher document, or any trust-evaluation error exits 1 with
+`TRUST FAILURE [OUTCOME]` and leaves no destination file, partial file or
+receipt. `--allow-untrusted` is the only opt-out; it skips the trust and
+revocation checks, is announced in the output, and is recorded in the receipt
+as `publisherTrust: "not-evaluated"`.
 
 Key generation MUST use the platform's secure cryptographic primitives. Private
 key material MUST NOT appear in manifests, publisher documents, registry

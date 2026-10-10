@@ -126,8 +126,13 @@ $D release sign "$REPO/examples/widget.manifest.json" \
   --key publisher.pem --key-id key-1 --publisher-document publisher.json --out release.json
 $D publish release.json --registry "$REGISTRY" --artifacts dist
 
-# 5. A CONSUMER needs no credential: resolve, then download by digest and verify.
+# 5. A CONSUMER needs no credential, but must decide whom to trust. Acquisition
+#    requires it: a valid signature alone only proves SOMEONE signed the release.
+#    The consumer anchors publisher://acme to the document it obtained out of
+#    band (here, the publisher's own file), in a trust store of its own.
 unset DISTRIBUTION_TOKEN
+export DISTRIBUTION_TRUST_STORE=$PWD/consumer-trust.json
+$D trust add publisher://acme --publisher-document publisher.json
 $D resolve product://acme/widget --os linux --arch x64 --registry "$REGISTRY"
 $D acquire product://acme/widget@1.2.0 --registry "$REGISTRY" \
   --os linux --arch x64 --out widget --receipt receipt.json
@@ -147,6 +152,14 @@ if DISTRIBUTION_TOKEN=$ACME_TOKEN $D publisher publish thief.json --registry "$R
   echo "UNEXPECTED: takeover accepted"; exit 1
 fi
 
+#    An acquisition from a publisher this consumer has NOT trusted is refused
+#    (exit 1, nothing written), however valid its digest and signature:
+if DISTRIBUTION_TRUST_STORE=$PWD/empty-trust.json $D acquire product://acme/widget@1.2.0 \
+     --registry "$REGISTRY" --os linux --arch x64 --out untrusted; then
+  echo "UNEXPECTED: untrusted publisher was accepted"; exit 1
+fi
+test ! -e untrusted
+
 # 7. The registry is still not trusted for the bytes. Corrupt the stored artifact:
 #    verification fails, and nothing is written.
 printf HELLO > registry/artifacts/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin
@@ -159,6 +172,28 @@ test ! -e tampered
 kill $SERVER
 ```
 <!-- quickstart:end -->
+
+### What `acquire` verifies
+
+`distribution acquire` establishes four different things, and reports them
+separately because none implies the next:
+
+| Check | Establishes | Does **not** establish |
+| --- | --- | --- |
+| **Digest** | the bytes equal the digest the release signed | who signed it |
+| **Signature** | the key named in the release signed this manifest | that you should believe that key's owner; anyone can sign with their own key |
+| **Publisher trust** | the publisher is one *you* anchored (`trust add --publisher-document`, or a pinned `--key-id`), the signing key belongs to that publisher's verified document lineage | that the software is safe |
+| **Revocation** | the signing key is not revoked in the publisher's current document | that the publisher's lineage is the freshest one (a registry that withholds a newer document can hide a revocation) |
+
+**Trusted acquisition is the default.** If the publisher is unknown, only trusted
+by name (not anchored), presents a lineage that does not descend from your anchor,
+has a revoked key, or the trust store or publisher document is missing or
+malformed, `acquire` exits 1 with a `TRUST FAILURE [CODE]` message and writes
+nothing — no destination file, no `.partial`, no receipt. The only opt-out is the
+explicit `--allow-untrusted`, which skips the trust and revocation checks, says so
+in its output, and records `publisherTrust: "not-evaluated"` in any receipt. The
+trust store is per user (`~/.distribution/trust.json`, override with
+`DISTRIBUTION_TRUST_STORE` or `--trust <file>`).
 
 Two separate questions are answered separately. **Credentials** decide who may
 write to *this registry*, and which namespace they may write to; they appear in no

@@ -195,3 +195,18 @@ implementation: it calls only contract methods. That is why the identical
 checks run against in-memory storage, filesystem storage and a remote HTTP
 registry — and why a behaviour that held for only one of them would be a bug
 rather than a feature.
+
+### Acquisition trust
+
+`packages/conformance/src/acquire-trust.test.mjs` and the CLI end-to-end suite
+`packages/cli/src/acquire-trust-e2e.test.mjs` require that:
+
+- a publisher anchored in the policy is accepted, with revocation checked;
+- an unknown publisher, a publisher trusted by name only, and a look-alike
+  document for the same identity are each refused with a distinct outcome;
+- a forged successor, a tampered document, and missing or malformed documents
+  or policy fail closed without throwing;
+- a key revoked after signing is refused at acquisition, while a legitimately
+  rotated lineage is still accepted;
+- receipts never claim trust or revocation checks that were not performed;
+- a refused acquisition leaves no destination file, partial file or receipt.

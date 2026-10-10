@@ -407,3 +407,14 @@ G3 (`--artifact <id>`) is a cheap distribution-protocol follow-on if the `.app` 
   failure/compatibility cases and as the *control* provider in the version-compatibility tests; they are
   labelled as fixtures. The headline results (§4, §5.2, §5.3) use real artifacts from AppBoundry and Synapse.
 * **Cross-repository CI:** none added. The spike needs two private repositories; it is a manual harness.
+
+---
+
+## Update: G2 is fixed on `fix/acquire-publisher-trust`
+
+`distribution acquire` now evaluates publisher trust by default (anchored publisher, key not
+revoked, fail closed, no destination/receipt on refusal). The look-alike scenario above no longer
+exits 0 by default; the table rows and gap list above record the behaviour **at the time of the
+spike**. `--allow-untrusted` reproduces the old integrity-and-signature-only behaviour, announced
+and recorded in the receipt. The harness's legitimate-flow helper uses that flag because those
+spikes are about AppBoundry packaging, not trust.
