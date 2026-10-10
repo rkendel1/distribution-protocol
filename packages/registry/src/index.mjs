@@ -15,6 +15,8 @@ export { LocalRegistry } from './local-registry.mjs';
 export { HttpRegistryClient } from './http-client.mjs';
 export { createRegistryHandler, STATUS_BY_CODE } from './http.mjs';
 export { serveRegistry } from './server.mjs';
+export { TokenStore, AuthError, TOKEN_PATTERN, parseDuration } from './auth.mjs';
+export { assertPublisherAdmission, assertReleaseAdmission } from './namespace-policy.mjs';
 export { registryTransport } from './registry-transport.mjs';
 export { DEFAULT_MAX_ARTIFACT_BYTES } from './artifact-store.mjs';
 export {

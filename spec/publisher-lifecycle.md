@@ -73,9 +73,16 @@ Rules:
 - `sequence: 1` MUST have `previousDocument: null`.
 - `sequence > 1` MUST name a predecessor.
 - A lineage MUST have contiguous sequences and matching predecessor links.
+- **Key continuity:** every document after the first MUST be signed by a key that
+  the document it supersedes declares and still allows to sign (`active`, not
+  `rotated`, `revoked` or outside its validity window). The key is identified by
+  its material (fingerprint), not by the name the new document gives it.
+  Self-consistency alone is not enough: without this rule anyone can append a
+  "successor" signed by their own new key and become the publisher.
 - Rewriting history requires re-signing every document after the edit.
 
-`verifyPublisherLineage(documents)` verifies a whole chain.
+`verifyPublisherLineage(documents)` verifies a whole chain, including key
+continuity (`verifyPublisherSuccession(previous, next)` is the single-step rule).
 
 ## 3. Rotation is atomic
 

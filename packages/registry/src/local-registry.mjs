@@ -38,14 +38,21 @@ import { digestHex, digestOfBytes, isDigest } from '../../protocol/src/artifact.
 import { canonicalize } from '../../protocol/src/canonical.mjs';
 import { orderReleases } from './contract.mjs';
 import { consumeVerified, DEFAULT_MAX_ARTIFACT_BYTES } from './artifact-store.mjs';
+import { assertPublisherAdmission, assertReleaseAdmission, createMutex, instant } from './namespace-policy.mjs';
 
 export class LocalRegistry {
   /**
    * @param {object} options
    * @param {string} options.root directory to store releases and artifacts in
    * @param {Record<string, object>} [options.publisherKeys] trusted keys by keyId
+   * @param {boolean} [options.enforceOwnership] admit documents and releases only
+   *   as namespace ownership allows (spec/registry-auth.md O1–O4)
+   * @param {() => number} [options.now] clock (ms), injectable for tests
    */
-  constructor({ root, publisherKeys } = {}) {
+  constructor({ root, publisherKeys, enforceOwnership = false, now = () => Date.now() } = {}) {
+    this.enforceOwnership = enforceOwnership;
+    this.now = now;
+    this.lock = createMutex();
     if (!root) throw new Error('LocalRegistry requires a root directory');
     this.root = root;
     this.releasesDir = path.join(root, 'releases');
@@ -85,6 +92,10 @@ export class LocalRegistry {
    * @returns {Promise<{created: boolean, documentId: string, sequence: number}>}
    */
   async publishPublisher(envelope) {
+    return this.lock(() => this.#publishPublisher(envelope));
+  }
+
+  async #publishPublisher(envelope) {
     const check = verifyPublisherDocumentSignature(envelope);
     if (!check.valid) {
       throw new SignatureError(`refusing to publish publisher document: ${check.reason}`, {
@@ -107,6 +118,12 @@ export class LocalRegistry {
           { publisher: publisherIdValue, sequence, documentId },
         );
       }
+    }
+
+    // Ownership (O1/O2). A replay of a stored document is a no-op, so it is
+    // answered before the head is consulted: re-filing history cannot move it.
+    if (this.enforceOwnership && !existsSync(file)) {
+      assertPublisherAdmission({ head: await this.getPublisher(publisherIdValue), envelope });
     }
 
     await mkdir(dir, { recursive: true });
@@ -197,6 +214,16 @@ export class LocalRegistry {
 
     const releaseId = releaseIdOf(release.manifest);
     const file = this.#releasePath(release.manifest);
+
+    // Ownership (O4): only NEW releases are admitted against the namespace's
+    // keys; an identical re-publish is idempotent and a different one conflicts.
+    if (this.enforceOwnership && !existsSync(file)) {
+      assertReleaseAdmission({
+        head: await this.getPublisher(release.manifest.publisher.id),
+        release,
+        at: instant(this.now()),
+      });
+    }
     await mkdir(path.dirname(file), { recursive: true });
 
     const payload = `${JSON.stringify(release, null, 2)}\n`;

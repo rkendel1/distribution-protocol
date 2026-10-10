@@ -98,6 +98,37 @@ package publishes a real artifact over HTTP and proves a registry that serves
 altered bytes, truncated bytes, or lies about resolution and metadata cannot
 make a client accept anything other than the bytes the publisher signed.
 
+### Authentication and namespace ownership
+
+A registry that enforces [registry-auth.md](./registry-auth.md) must pass
+`registry-auth.test.mjs` (HTTP) and the ownership checks (`MemoryRegistry` and
+`LocalRegistry` with `enforceOwnership`, which must agree on every outcome). The
+tests cite the spec's rule ids and are adversarial — each `ATTACK` test is an
+attack that succeeded before this layer existed:
+
+- **A1–A3** writes need a credential; missing, malformed, unknown, wrong,
+  revoked and expired credentials get the specified status and code, one fixed
+  body for all invalid credentials; duplicate headers and query-string
+  credentials are refused; credentials are checked before the body is read.
+- **A4** no credential, hash or header appears in any response, log entry,
+  error, stored registry file, signed release or receipt; the client keeps its
+  token out of inspection and serialization, refuses cleartext remote HTTP and
+  does not follow redirects with a credential.
+- **A5** reads are public by default and require a credential when configured.
+- **N1–N4** a credential for one namespace cannot publish, claim or modify
+  another's releases or documents; the request path cannot smuggle a release for
+  another namespace; a read-only credential writes nothing; there is no API
+  that mints or widens a credential.
+- **O1–O5** the first document claims a namespace; a token holder who lacks the
+  owner key cannot take over; the owner can rotate; gaps, forks, revoked and
+  rotated-out keys, and replays cannot move ownership; releases need a declared,
+  active key; published releases cannot be changed; concurrent successors are
+  serialized.
+
+`publisher-continuity.test.mjs` checks the same continuity rule in the protocol
+layer, so a *consumer* verifying a lineage rejects a takeover chain too. The CLI
+package's `auth-e2e.test.mjs` runs the whole flow through real processes.
+
 ### Resolution
 
 - the newest matching release is selected;

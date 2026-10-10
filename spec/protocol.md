@@ -163,7 +163,8 @@ The registry stores product identity, release metadata, signed manifests,
 artifact references and publisher identity. It is **not** the authority for
 product identity — the publisher signature is.
 
-See [`registry-api.md`](./registry-api.md).
+See [`registry-api.md`](./registry-api.md). Who may write to a registry, and
+how a namespace is owned, is specified in [`registry-auth.md`](./registry-auth.md).
 
 ## 9. Publish semantics
 
@@ -265,6 +266,13 @@ than in one implementation.
 11. Undocumented fields MUST be rejected.
 12. Discovery MUST NOT be required for resolution.
 13. Payments and entitlements MUST remain outside product identity.
+14. A publisher document MUST be authorized by the document it supersedes: its
+    signing key MUST be a key that predecessor declares and still allows to sign.
+15. Credentials that authorize writes to a registry MUST NOT appear in any signed
+    object, artifact metadata or receipt, and authentication MUST NOT substitute
+    for signature verification (or the reverse).
+16. A registry that enforces namespace ownership is performing admission control,
+    not establishing trust: consumers MUST still verify everything they accept.
 
 ## 16. Non-goals
 
@@ -279,5 +287,6 @@ global registry, or any proprietary hosting platform.
 2. [`manifest.schema.json`](./manifest.schema.json) — the manifest contract.
 3. [`canonicalization.md`](./canonicalization.md) — byte-exact serialization.
 4. [`registry-api.md`](./registry-api.md) — the HTTP mapping.
+   [`registry-auth.md`](./registry-auth.md) — write access and namespace ownership.
 5. [`conformance.md`](./conformance.md) — how to prove conformance.
 

@@ -110,6 +110,7 @@ export {
   validatePublisherDocument,
   findKey,
   keyStateAt,
+  verifyPublisherSuccession,
   documentIdOf,
   isDocumentId,
   transitionPublisherDocument,

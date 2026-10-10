@@ -19,6 +19,11 @@
  * `/v1/releases/acme%2Fwidget/1.2.0`. Registry location is a transport detail:
  * nothing in the path ever becomes part of product identity.
  *
+ * Authentication (optional, `options.auth`): write routes need a bearer token
+ * granting the namespace being written; see spec/registry-auth.md. Credentials
+ * are checked before any request body is read and never appear in a response,
+ * error or log line.
+ *
  * Errors carry the protocol's stable `code`, so clients branch on the code and
  * never parse prose.
  */
@@ -27,6 +32,7 @@ import { pipeline } from 'node:stream/promises';
 
 import { REGISTRY_STATUS, supportsArtifactContent } from './contract.mjs';
 import { DEFAULT_MAX_ARTIFACT_BYTES, artifactTooLarge } from './artifact-store.mjs';
+import { AuthError, forbidden, grantsNamespace } from './auth.mjs';
 import { ErrorCode, ProtocolError } from '../../protocol/src/errors.mjs';
 import { isDigest } from '../../protocol/src/artifact.mjs';
 import { parseProductId, parsePublisherId } from '../../protocol/src/identifiers.mjs';
@@ -51,6 +57,13 @@ const STATUS_BY_CODE = {
   [ErrorCode.RELEASE_NOT_FOUND]: 404,
   [ErrorCode.ARTIFACT_NOT_FOUND]: 404,
   [ErrorCode.BAD_REQUEST]: 400,
+  [ErrorCode.AUTHENTICATION_REQUIRED]: 401,
+  [ErrorCode.INVALID_CREDENTIALS]: 401,
+  [ErrorCode.CREDENTIALS_EXPIRED]: 401,
+  [ErrorCode.FORBIDDEN]: 403,
+  [ErrorCode.OWNERSHIP_VIOLATION]: 403,
+  [ErrorCode.KEY_REVOKED]: 403,
+  [ErrorCode.NAMESPACE_UNCLAIMED]: 409,
   [ErrorCode.DIGEST_MISMATCH]: 422,
   [ErrorCode.ARTIFACT_TOO_LARGE]: 413,
   [ErrorCode.ARTIFACT_STORAGE_UNSUPPORTED]: 501,
@@ -76,7 +89,7 @@ function sendJson(res, status, body, headers = {}) {
  * the publisher-signed release, so a registry that serves wrong bytes here is
  * caught on the client, not trusted.
  */
-async function handleArtifactContent(registry, req, res, digest, { maxArtifactBytes }) {
+async function handleArtifactContent(registry, req, res, digest, { maxArtifactBytes, principal }) {
   if (!supportsArtifactContent(registry)) {
     sendJson(res, 501, {
       code: ErrorCode.ARTIFACT_STORAGE_UNSUPPORTED,
@@ -86,6 +99,10 @@ async function handleArtifactContent(registry, req, res, digest, { maxArtifactBy
   }
 
   if (req.method === 'PUT') {
+    // N3: blobs belong to no namespace, so any write grant will do; a read-only
+    // credential cannot upload.
+    if (principal && principal.namespaces.length === 0) throw forbidden();
+
     // Refuse early on a declared size so an oversize body is never read; the
     // streaming limit in the registry still covers chunked uploads that declare
     // nothing. `connection: close` because the unread body makes the socket
@@ -160,13 +177,48 @@ async function readJsonBody(req, { limit = 8 * 1024 * 1024 } = {}) {
  * @param {object} registry anything implementing the registry contract
  * @param {object} [options]
  * @param {number} [options.maxArtifactBytes] ceiling for one artifact upload
+ * @param {object} [options.auth] enable authentication
+ * @param {import('./auth.mjs').TokenStore} options.auth.tokens credential store
+ * @param {'public'|'authenticated'} [options.auth.readAccess] who may read (default `public`)
+ * @param {(entry: {method: string, path: string, status: number, tokenId: string|null}) => void} [options.auth.logger]
+ *   receives one redacted entry per request: never a secret, header or body
  * @returns {(req: object, res: object) => Promise<void>}
  */
-export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX_ARTIFACT_BYTES } = {}) {
+export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX_ARTIFACT_BYTES, auth = null } = {}) {
   return async function handle(req, res) {
+    let principal = null;
+    let logPath = '';
+    if (auth?.logger) {
+      res.once('close', () => {
+        try {
+          auth.logger({ method: req.method, path: logPath, status: res.statusCode, tokenId: principal?.tokenId ?? null });
+        } catch {
+          // A failing logger must never fail a request.
+        }
+      });
+    }
+
     try {
       const url = new URL(req.url, 'http://registry.invalid');
+      logPath = url.pathname; // never the query string
       const segments = url.pathname.split('/').filter(Boolean);
+
+      // --- authentication (A1, A2, A5) -------------------------------------
+      // Before any body is read. Anything that is not a plain read is a write.
+      if (auth && segments[0] === 'v1') {
+        const isRead =
+          req.method === 'GET' ||
+          req.method === 'HEAD' ||
+          (req.method === 'POST' && segments[1] === 'resolve');
+        if (!isRead || auth.readAccess === 'authenticated') {
+          const headerCount = req.rawHeaders.filter((h, i) => i % 2 === 0 && h.toLowerCase() === 'authorization').length;
+          principal = await auth.tokens.authenticate(req.headers.authorization, { headerCount });
+        }
+      }
+      /** N1–N3: the namespace being written must be one the credential grants. */
+      const requireGrant = (namespace) => {
+        if (principal && !grantsNamespace(principal, namespace)) throw forbidden(namespace);
+      };
 
       // --- POST /v1/resolve ------------------------------------------------
       if (req.method === 'POST' && segments[0] === 'v1' && segments[1] === 'resolve') {
@@ -184,7 +236,11 @@ export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX
           return;
         }
         if (segments[3] === 'content') {
-          await handleArtifactContent(registry, req, res, digest, { maxArtifactBytes });
+          await handleArtifactContent(registry, req, res, digest, { maxArtifactBytes, principal });
+          return;
+        }
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          sendJson(res, 405, { code: ErrorCode.BAD_REQUEST, message: `${req.method} not allowed here` }, { allow: 'GET, HEAD' });
           return;
         }
         const meta = await registry.getArtifact(digest);
@@ -211,6 +267,7 @@ export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX
         // re-signs it: a registry that re-signed would be asserting identity,
         // which is precisely the authority the protocol denies it.
         if (req.method === 'PUT') {
+          requireGrant(publisher); // N2, before the body is read
           const envelope = await readJsonBody(req);
 
           // The path and the document must agree. Otherwise one publisher could
@@ -257,8 +314,14 @@ export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX
       // --- /v1/releases/... ------------------------------------------------
       if (segments[0] === 'v1' && segments[1] === 'releases' && segments[2]) {
         const product = decodeURIComponent(segments[2]);
-        parseProductId(`product://${product}`); // rejects malformed products
+        const pathProduct = parseProductId(`product://${product}`); // rejects malformed products
         const version = segments[3] ? decodeURIComponent(segments[3]) : null;
+
+        // O5: nothing removes or edits a release. Only reads and publication exist.
+        if (req.method !== 'PUT' && req.method !== 'GET' && req.method !== 'HEAD') {
+          sendJson(res, 405, { code: ErrorCode.BAD_REQUEST, message: `${req.method} not allowed here` }, { allow: 'GET, HEAD, PUT' });
+          return;
+        }
 
         // PUT publishes.
         if (req.method === 'PUT') {
@@ -266,7 +329,29 @@ export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX
             sendJson(res, 400, { code: ErrorCode.BAD_REQUEST, message: 'publish requires a version' });
             return;
           }
+          requireGrant(pathProduct.namespace); // N1, before the body is read
           const release = await readJsonBody(req);
+
+          // N1: the request must be for the release it carries. Without this a
+          // grant for one namespace's path could publish another's release.
+          let body = null;
+          try {
+            body = parseProductId(release?.manifest?.product?.id);
+          } catch {
+            // Malformed: the registry reports it as a manifest error.
+          }
+          if (
+            body &&
+            (body.namespace !== pathProduct.namespace ||
+              body.slug !== pathProduct.slug ||
+              String(release.manifest.product.version).toLowerCase() !== version.toLowerCase())
+          ) {
+            sendJson(res, 400, {
+              code: ErrorCode.BAD_REQUEST,
+              message: 'the release in the body is not the one named by the request path',
+            });
+            return;
+          }
           const result = await registry.publishRelease(release);
           sendJson(res, result.created ? 201 : 200, result);
           return;
@@ -301,17 +386,16 @@ export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX
         return;
       }
       if (err instanceof ProtocolError) {
-        const closing = err.code === ErrorCode.ARTIFACT_TOO_LARGE || err.code === ErrorCode.DIGEST_MISMATCH;
-        sendJson(
-          res,
-          STATUS_BY_CODE[err.code] ?? 400,
-          { code: err.code, message: err.message },
-          // The request body may be partly unread; do not reuse this connection.
-          closing ? { connection: 'close' } : {},
-        );
+        const headers = {};
+        // The request body may be partly unread; do not reuse this connection.
+        if (!req.readableEnded) headers.connection = 'close';
+        if (STATUS_BY_CODE[err.code] === 401) headers['www-authenticate'] = 'Bearer realm="distribution-registry"';
+        // Auth failures carry fixed text; everything else is the protocol's own
+        // message, which never includes request headers or credentials.
+        sendJson(res, STATUS_BY_CODE[err.code] ?? 400, { code: err.code, message: err.message }, headers);
         return;
       }
-      sendJson(res, 500, { code: 'INTERNAL', message: err.message });
+      sendJson(res, 500, { code: 'INTERNAL', message: 'internal error' });
     }
   };
 }

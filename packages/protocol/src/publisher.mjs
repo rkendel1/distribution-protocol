@@ -465,6 +465,66 @@ export function keyStateAt(key, at) {
 }
 
 /**
+ * Does `next` legitimately succeed `previous`?
+ *
+ * This is the rule that makes a publisher document lineage mean something:
+ *
+ *   a document may only be superseded by a document signed with a key that the
+ *   document being superseded authorizes.
+ *
+ * Without it a lineage is only a sequence of self-consistent documents, and an
+ * attacker can append one signed by their own new key and become the publisher.
+ *
+ * Checked, in order:
+ *   - `next` extends `previous`: the next sequence number, naming `previous` as
+ *     its predecessor (`PUBLISHER_CONFLICT` otherwise);
+ *   - `next` was signed by a key that is declared by `previous` and still
+ *     allowed to sign there (`OWNERSHIP_VIOLATION` otherwise).
+ *
+ * The signing key is identified by key MATERIAL (its fingerprint), not by the
+ * name the new document gives it — a new document cannot launder a key by
+ * reusing an old key's name. Authorization is judged against `previous` only,
+ * never against `next`, so a revoked key cannot re-authorize itself.
+ *
+ * Both envelopes must already have passed signature verification; this checks
+ * only how they relate.
+ *
+ * @param {object} previous the envelope being superseded (the current head)
+ * @param {object} next the candidate successor
+ * @returns {{valid: boolean, code: string|null, reason: string|null}}
+ */
+export function verifyPublisherSuccession(previous, next) {
+  const fail = (code, reason) => ({ valid: false, code, reason });
+
+  const expected = (previous?.document?.sequence ?? 1) + 1;
+  if ((next?.document?.sequence ?? 1) !== expected) {
+    return fail('PUBLISHER_CONFLICT', `document does not extend the head: expected sequence ${expected}`);
+  }
+  if ((next?.document?.previousDocument ?? null) !== documentIdOf(previous.document)) {
+    return fail('PUBLISHER_CONFLICT', 'document does not name the current head as its predecessor');
+  }
+
+  const signature = next?.signature ?? {};
+  const signer = findKey(next.document, signature.keyId, signature.keyFingerprint);
+  if (!signer) {
+    return fail('OWNERSHIP_VIOLATION', 'the signing key is not declared by the document');
+  }
+  const signerFingerprint = keyFingerprint(importPublicKey(signer.publicKey));
+
+  const authorizing = (previous.document.keys ?? []).find(
+    (key) => keyFingerprint(importPublicKey(key.publicKey)) === signerFingerprint,
+  );
+  if (!authorizing) {
+    return fail('OWNERSHIP_VIOLATION', 'the document is not signed by a key the current owner authorizes');
+  }
+  const state = keyStateAt(authorizing, isValidTimestamp(next.document.publishedAt) ? next.document.publishedAt : undefined);
+  if (state !== KeyState.ACTIVE) {
+    return fail('OWNERSHIP_VIOLATION', `the signing key is ${state} in the current document and may not authorize a successor`);
+  }
+  return { valid: true, code: null, reason: null };
+}
+
+/**
  * Produce a NEW signed publisher document that supersedes a previous one.
  *
  * Every publisher state change has this shape:

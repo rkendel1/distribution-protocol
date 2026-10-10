@@ -32,6 +32,7 @@ import { digestOfBytes, isDigest, validateArtifactMetadata } from '../../protoco
 import { ProtocolError } from '../../protocol/src/errors.mjs';
 import { orderReleases, isSameRelease } from './contract.mjs';
 import { consumeVerified, DEFAULT_MAX_ARTIFACT_BYTES } from './artifact-store.mjs';
+import { assertPublisherAdmission, assertReleaseAdmission, createMutex, instant } from './namespace-policy.mjs';
 
 export class MemoryRegistry {
   /**
@@ -41,8 +42,16 @@ export class MemoryRegistry {
    *   listed key are accepted. When omitted the registry trusts the key
    *   embedded in each envelope — convenient for conformance testing, and the
    *   reason production registries should supply the map.
+   * @param {boolean} [options.enforceOwnership]
+   *   admit publisher documents and releases only as namespace ownership
+   *   allows (spec/registry-auth.md O1–O4). Off by default so library use and
+   *   tests keep the open behaviour.
+   * @param {() => number} [options.now] clock (ms), injectable for tests
    */
-  constructor({ publisherKeys } = {}) {
+  constructor({ publisherKeys, enforceOwnership = false, now = () => Date.now() } = {}) {
+    this.enforceOwnership = enforceOwnership;
+    this.now = now;
+    this.lock = createMutex();
     /** @type {Map<string, object>} releaseId -> envelope */
     this.releases = new Map();
     /** @type {Map<string, object>} digest -> artifact metadata */
@@ -67,6 +76,10 @@ export class MemoryRegistry {
    * @throws {SignatureError|PublisherConflictError}
    */
   async publishPublisher(envelope) {
+    return this.lock(() => this.#publishPublisher(envelope));
+  }
+
+  async #publishPublisher(envelope) {
     const check = verifyPublisherDocumentSignature(envelope);
     if (!check.valid) {
       throw new SignatureError(`refusing to publish publisher document: ${check.reason}`, {
@@ -94,6 +107,12 @@ export class MemoryRegistry {
           { publisher: publisherId, sequence, documentId },
         );
       }
+    }
+
+    // Ownership (O1/O2): judged against the CURRENT head, after replays have
+    // returned above, so re-filing an old document is always a harmless no-op.
+    if (this.enforceOwnership) {
+      assertPublisherAdmission({ head: await this.getPublisher(publisherId), envelope });
     }
 
     documents.set(documentId, envelope);
@@ -180,6 +199,16 @@ export class MemoryRegistry {
         `release ${releaseId} already exists with different content; releases are immutable`,
         { releaseId },
       );
+    }
+
+    // Ownership (O4): only NEW releases are admitted against the namespace's
+    // keys. An identical re-publish returned above; a conflicting one threw.
+    if (this.enforceOwnership) {
+      assertReleaseAdmission({
+        head: await this.getPublisher(release.manifest.publisher.id),
+        release,
+        at: instant(this.now()),
+      });
     }
 
     this.releases.set(releaseId, release);
