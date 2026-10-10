@@ -11,7 +11,7 @@
     "src"
   ],
   "scripts": {
-    "test": "node --test ../conformance/src/conformance.test.mjs"
+    "test": "node --test ../conformance/src/conformance.test.mjs ../conformance/src/federation.test.mjs ../conformance/src/publisher-registry.test.mjs ../conformance/src/publisher-discovery.test.mjs ../conformance/src/trust-federation.test.mjs"
   },
   "dependencies": {
     "@distribution-protocol/protocol": "1.0.0"

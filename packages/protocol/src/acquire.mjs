@@ -33,7 +33,13 @@ import { createHash } from 'node:crypto';
 import { AcquisitionError, DigestMismatchError } from './errors.mjs';
 import { isDigest } from './artifact.mjs';
 import { hashStream } from './cache.mjs';
-import { TransportRegistry, asTransportError, schemeOf } from './transport.mjs';
+import {
+  PermanentTransportError,
+  TransportError,
+  TransportRegistry,
+  asTransportError,
+  schemeOf,
+} from './transport.mjs';
 import { fileTransport } from './transport-file.mjs';
 import { httpsTransport } from './transport-https.mjs';
 
@@ -148,20 +154,23 @@ export async function acquireFromSource({
   const wantBytes = options.wantBytes !== false;
   const collected = wantBytes ? [] : null;
 
-  const observed = collected
-    ? async function* tee() {
-        for await (const chunk of stream) {
-          collected.push(chunk);
-          yield chunk;
-        }
-      }
-    : stream;
+  // `tee` is a generator FUNCTION; it must be called to obtain the iterable that
+  // `hashStream` consumes. Each chunk is collected (when wanted) and forwarded
+  // as it passes, so the source is read exactly once. When the hasher stops
+  // early or throws, `for await` closes this generator, which in turn closes the
+  // transport stream, so the underlying file or socket is released.
+  async function* tee(source) {
+    for await (const chunk of source) {
+      collected.push(chunk);
+      yield chunk;
+    }
+  }
+  const observed = collected ? tee(stream) : stream;
 
   let result;
   try {
     result = await hashStream(observed);
   } catch (err) {
-    process.stderr.write(`DIAG streamType=${Object.prototype.toString.call(observed)} err=${err.message}\n`);
     // A stream that dies mid-transfer is a transport failure, not an integrity
     // failure: we never saw the complete artifact, so we cannot say it was wrong.
     const wrapped = asTransportError(err, uri);
@@ -209,7 +218,16 @@ export async function acquireFromSource({
   if (artifactCache && !bytes) {
     // Re-acquire to stream into the cache: the first pass deliberately did not
     // buffer, which is what keeps large artifacts off the heap.
-    const stored = await artifactCache.putStream(digest, await transports.forUri(uri).acquire(uri, { signal, baseDir }));
+    let stored;
+    try {
+      stored = await artifactCache.putStream(digest, await transports.forUri(uri).acquire(uri, { signal, baseDir }));
+    } catch (err) {
+      // The first pass already verified this source, so a failure here is the
+      // transfer or the disk, not the content. `putStream` removes its temp file
+      // on error, so nothing partial is left visible under the digest.
+      const wrapped = asTransportError(err, uri);
+      return { ok: false, outcome: 'ARTIFACT_SOURCE_FAILED', digest, uri, reason: wrapped.message, kind: 'transient' };
+    }
     if (!stored.ok) {
       return { ok: false, outcome: AcquisitionOutcome.DIGEST_MISMATCH, digest, actual: stored.actual, uri, kind: 'integrity' };
     }
@@ -392,38 +410,88 @@ export function assertArtifact(bytes, expected) {
  * care that source selection now exists — but this throws on failure rather
  * than returning an outcome record, matching its original contract.
  *
+ * The original contract also let a caller inject `fetch(location) -> bytes`,
+ * which is how tests and the CLI hand over bytes for locations no transport
+ * understands. That is preserved: an injected fetcher is wrapped as a
+ * one-shot transport for this call only, and its bytes pass through exactly
+ * the same hashing and size checks as any other source.
+ *
  * @param {object} artifact
  * @param {object} [options]
  * @param {string} [options.location] the source URI
  * @param {string} [options.baseDir] for relative `file://` paths
+ * @param {(location: string) => Promise<Uint8Array>} [options.fetch]
  * @returns {Promise<Uint8Array>} verified bytes
  */
-export async function acquire(artifact, { location, baseDir, transports } = {}) {
+export async function acquire(artifact, { location, baseDir, transports, fetch: fetchImpl } = {}) {
+  if (!isDigest(artifact?.digest)) {
+    throw new AcquisitionError('artifact must carry a well-formed sha256 digest', {
+      digest: artifact?.digest,
+    });
+  }
   if (!location) {
     throw new AcquisitionError('an artifact location is required to acquire bytes', {
       digest: artifact?.digest,
     });
   }
+  if (fetchImpl) transports = new TransportRegistry().register(fetcherTransport(fetchImpl));
+
   const result = await acquireFromSource({
-    digest: artifact?.digest,
+    digest: artifact.digest,
     artifact,
     uri: location,
     transports,
     baseDir,
   });
   if (!result.ok) {
-    // Preserve the two distinct failure identities: a digest mismatch is an
-    // integrity problem, anything else is an acquisition problem.
+    // Preserve the distinct failure identities: a digest or size mismatch is
+    // an integrity problem, anything else is an acquisition problem.
     if (result.outcome === AcquisitionOutcome.DIGEST_MISMATCH) {
-      throw new DigestMismatchError(result.reason, { expected: result.digest, actual: result.actual });
+      throw new DigestMismatchError('acquired bytes do not match the published digest', {
+        digest: artifact.digest,
+        expected: result.digest,
+        actual: result.actual,
+        location,
+      });
     }
-    throw new AcquisitionError(result.reason, {
-      digest: artifact?.digest,
+    if (result.outcome === AcquisitionOutcome.SIZE_MISMATCH) {
+      throw new DigestMismatchError('acquired byte length does not match the declared size', {
+        digest: artifact.digest,
+        expected: artifact.size,
+        actual: result.size,
+        location,
+      });
+    }
+    throw new AcquisitionError(`failed to acquire artifact bytes from ${location}: ${result.reason}`, {
+      digest: artifact.digest,
       location,
       outcome: result.outcome,
+      reason: result.reason,
     });
   }
   return result.bytes;
+}
+
+/** Wrap a caller-injected `fetch(location) -> bytes` as a transport. */
+function fetcherTransport(fetchImpl) {
+  return {
+    scheme: 'injected',
+    canHandle: () => true,
+    async acquire(uri) {
+      let bytes;
+      try {
+        bytes = await fetchImpl(uri);
+      } catch (err) {
+        throw new TransportError(err.message, { uri, cause: err });
+      }
+      if (!(bytes instanceof Uint8Array)) {
+        throw new PermanentTransportError(`fetcher for ${uri} did not return bytes`, { uri });
+      }
+      return (async function* single() {
+        yield bytes;
+      })();
+    },
+  };
 }
 
 /**
