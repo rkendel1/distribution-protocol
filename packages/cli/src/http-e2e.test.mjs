@@ -145,7 +145,7 @@ test('publish a real artifact to an HTTP registry, then resolve, download and ve
   const out = path.join(consumer, 'widget');
   const receiptPath = path.join(consumer, 'receipt.json');
   const acquired = await cli(
-    ['acquire', RELEASE_ID, '--registry', url, ...TARGET, '--out', out, '--receipt', receiptPath],
+    ['acquire', RELEASE_ID, '--registry', url, ...TARGET, '--allow-untrusted', '--out', out, '--receipt', receiptPath],
     { cwd: consumer },
   );
   assert.equal(acquired.code, 0, acquired.stderr);
@@ -183,7 +183,7 @@ test('the signed manifest names no location: the same release works from a secon
 
   for (const [i, url] of [a, b].entries()) {
     const out = path.join(f.work, `from-${i}`);
-    const res = await cli(['acquire', RELEASE_ID, '--registry', url, ...TARGET, '--out', out]);
+    const res = await cli(['acquire', RELEASE_ID, '--registry', url, ...TARGET, '--allow-untrusted', '--out', out]);
     assert.equal(res.code, 0, res.stderr);
     assert.equal(digestOf(await readFile(out)), f.digest);
   }
@@ -250,11 +250,11 @@ test('altered bytes fail verification even when the registry claims they are val
 
   // Control: the same client against the honest registry succeeds.
   const control = path.join(f.work, 'control');
-  assert.equal((await cli(['acquire', RELEASE_ID, '--registry', real, ...TARGET, '--out', control])).code, 0);
+  assert.equal((await cli(['acquire', RELEASE_ID, '--registry', real, ...TARGET, '--allow-untrusted', '--out', control])).code, 0);
 
   const out = path.join(f.work, 'from-evil');
   const receipt = path.join(f.work, 'evil-receipt.json');
-  const res = await cli(['acquire', RELEASE_ID, '--registry', evil, ...TARGET, '--out', out, '--receipt', receipt]);
+  const res = await cli(['acquire', RELEASE_ID, '--registry', evil, ...TARGET, '--allow-untrusted', '--out', out, '--receipt', receipt]);
 
   assert.equal(res.code, 1, 'acquisition must fail');
   assert.match(res.stderr, /INTEGRITY FAILURE/);
@@ -272,7 +272,7 @@ test('a truncated download fails verification', async (t) => {
     tamper: ({ url, body }) => (isContent(url) ? { body: body.subarray(0, body.length - 1), headers: {} } : { body, headers: {} }),
   });
   const out = path.join(f.work, 'truncated');
-  const res = await cli(['acquire', RELEASE_ID, '--registry', evil, ...TARGET, '--out', out]);
+  const res = await cli(['acquire', RELEASE_ID, '--registry', evil, ...TARGET, '--allow-untrusted', '--out', out]);
   assert.equal(res.code, 1);
   assert.equal(await exists(out), false);
 });
@@ -289,7 +289,7 @@ test('bytes corrupted at rest in the registry fail verification', async (t) => {
   await writeFile(blob, damaged);
 
   const out = path.join(f.work, 'damaged');
-  const res = await cli(['acquire', RELEASE_ID, '--registry', url, ...TARGET, '--out', out]);
+  const res = await cli(['acquire', RELEASE_ID, '--registry', url, ...TARGET, '--allow-untrusted', '--out', out]);
   assert.equal(res.code, 1);
   assert.match(res.stderr, /INTEGRITY FAILURE/);
   assert.equal(await exists(out), false);
@@ -325,7 +325,7 @@ test('a registry cannot steer the client to a different artifact by lying in res
   });
 
   const out = path.join(f.work, 'steered');
-  const res = await cli(['acquire', RELEASE_ID, '--registry', evil, ...TARGET, '--out', out]);
+  const res = await cli(['acquire', RELEASE_ID, '--registry', evil, ...TARGET, '--allow-untrusted', '--out', out]);
   assert.equal(res.code, 0, res.stderr);
   const got = await readFile(out);
   assert.equal(digestOf(got), f.digest, 'the digest comes from the signed release');
@@ -345,7 +345,7 @@ test('acquiring a release whose bytes were never uploaded fails clearly', async 
   assert.equal((await cli(['publish', f.releasePath, '--registry', url])).code, 0);
 
   const out = path.join(f.work, 'missing');
-  const res = await cli(['acquire', RELEASE_ID, '--registry', url, ...TARGET, '--out', out]);
+  const res = await cli(['acquire', RELEASE_ID, '--registry', url, ...TARGET, '--allow-untrusted', '--out', out]);
   assert.equal(res.code, 1);
   assert.match(res.stderr, /no bytes for/);
   assert.equal(await exists(out), false);

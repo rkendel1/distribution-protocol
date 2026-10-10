@@ -244,7 +244,7 @@ describe('P2/P4 distribution-side failure and trust boundaries (real CLI)', () =
     expect((await dp(['release', 'verify', f])).code).toBe(1);
   });
 
-  test('BOUNDARY: an attacker\'s own registry can serve a validly signed, self-consistent look-alike and `acquire` accepts it', async () => {
+  test('BOUNDARY (fixed, G2): an attacker\'s own registry serves a validly signed, self-consistent look-alike and `acquire` now refuses it', async () => {
     // The attacker runs their own registry and publishes an AppBoundry-shaped package under the SAME product id.
     const evilDir = path.join(work, 'evil-registry');
     const evil = await startRegistry(evilDir);
@@ -261,11 +261,17 @@ describe('P2/P4 distribution-side failure and trust boundaries (real CLI)', () =
       });
       const clean = await mkdtemp(path.join(tmpdir(), 'spike-02-evil-'));
       const out = path.join(clean, 'AppBoundry.appbundle');
-      const r = await acquire({ url: evil.url, releaseId: evilRel.releaseId, out, cwd: clean });
-      // acquire does not consult any trust policy: signature + digest are self-consistent, so it succeeds.
-      expect(r.code).toBe(0);
-      expect(r.stdout).toMatch(/\(verified\)/);
-      // AppBoundry's own checks pass too: the package is internally consistent and unsigned.
+      // Default (trusted) acquisition: signature + digest are self-consistent, but this consumer
+      // never anchored the publisher, so acquire fails closed and writes nothing.
+      const r = await acquire({ url: evil.url, releaseId: evilRel.releaseId, out, cwd: clean, trusted: true });
+      expect(r.code).toBe(1);
+      expect(r.stderr).toMatch(/TRUST FAILURE \[UNKNOWN_PUBLISHER\]/);
+      expect(r.stdout).not.toMatch(/verified/);
+      await expect(readFile(out)).rejects.toThrow();
+      // Only the explicit opt-out accepts it, and it says so; the package itself is internally consistent.
+      const opt = await acquire({ url: evil.url, releaseId: evilRel.releaseId, out, cwd: clean });
+      expect(opt.code).toBe(0);
+      expect(opt.stdout).toMatch(/publisher trust NOT evaluated/);
       expect((await inspectApplicationPackage(out)).application.id).toBe('dev.appboundry.portal');
       expect((await inspectApplicationPackage(out)).package_identity).not.toContain('cae5adb5');
 

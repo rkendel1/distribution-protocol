@@ -263,7 +263,13 @@ The registry is **not** trusted for authenticity. A client:
    artifact digest from the verified, signed release, never from a registry's
    resolve response or artifact metadata;
 4. MUST hash downloaded bytes and compare them to that digest before using or
-   keeping them, whatever the registry claimed.
+   keeping them, whatever the registry claimed;
+5. MUST, when acquiring for use, additionally evaluate publisher trust against
+   the consumer's own policy ([`publisher-trust.md`](publisher-trust.md) §6.4)
+   before committing the artifact. A valid signature from a registry-served key
+   is not publisher trust: an attacker's registry can serve a perfectly signed
+   look-alike. Publisher documents fetched from the registry are evidence to be
+   checked against a locally held anchor, never an anchor themselves.
 
 These are enforced in
 [`http-client.mjs`](../packages/registry/src/http-client.mjs) and

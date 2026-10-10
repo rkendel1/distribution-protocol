@@ -131,6 +131,7 @@ export {
   verifyPublisherAt,
   verifyPublisherLineage,
 } from './trust.mjs';
+export { verifyAcquisitionTrust } from './acquire-trust.mjs';
 
 // Publisher discovery
 export {

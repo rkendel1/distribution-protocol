@@ -210,6 +210,11 @@ Selection is deterministic — a total order with no ties:
 | `acquire()` | How do I get it? | Bytes match the digest |
 | `verify()` | Is it what was published? | Signature and digest both check |
 
+A consumer acquiring for installation MUST additionally evaluate publisher
+trust (anchored publisher, key not revoked) before the artifact is committed to
+its destination; see [`publisher-trust.md`](publisher-trust.md) §6.4. Digest
+and signature validity are necessary and not sufficient.
+
 These are never collapsed. A consumer may resolve from one registry, acquire
 from a mirror, and verify against the signature.
 
@@ -228,6 +233,28 @@ from a mirror, and verify against the signature.
 
 A receipt is **protocol evidence**, not a payment receipt. Payments and
 entitlements are deliberately out of scope.
+
+A receipt MAY carry a `verification` object stating which checks actually ran:
+
+```json
+"verification": {
+  "digest": "verified",
+  "signature": "verified",
+  "publisherTrust": "verified",
+  "revocation": "checked",
+  "trustAnchor": "document",
+  "publisherDocument": "sha256:…"
+}
+```
+
+`digest` and `signature` are always `"verified"` when present. `publisherTrust`
+is `"verified"` only if the consumer's trust policy accepted the publisher
+(`trustAnchor` is then `"document"` or `"key-pin"`, and `revocation` MUST be
+`"checked"`); otherwise it is `"not-evaluated"`, `revocation` is `"not-checked"`
+and no `trustAnchor` is given. A receipt with no `verification` object, or one
+made without acquiring bytes, makes **no** trust claim. A signature that
+verifies proves only that some key signed; it is never, by itself, publisher
+trust.
 
 ## 13. Federated registries
 

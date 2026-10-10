@@ -82,6 +82,14 @@ export const TrustOutcome = Object.freeze({
   CONFLICTING_PUBLISHER_DOCUMENT: 'CONFLICTING_PUBLISHER_DOCUMENT',
   /** No registry had a document for this publisher. */
   PUBLISHER_NOT_FOUND: 'PUBLISHER_NOT_FOUND',
+  /**
+   * The publisher is named in the policy, but nothing in the policy ties that
+   * name to the documents or keys presented (no document anchor, no pinned
+   * key, or the presented lineage does not descend from the anchor). An
+   * identity string alone is not evidence: anyone can self-sign a document
+   * for any identity.
+   */
+  UNANCHORED_PUBLISHER: 'UNANCHORED_PUBLISHER',
 });
 
 /** Outcomes that indicate a well-formed but untrusted release. */
@@ -95,6 +103,7 @@ export const DENIED_OUTCOMES = Object.freeze([
   TrustOutcome.INVALID_RELEASE_SIGNATURE,
   TrustOutcome.OWNERSHIP_VIOLATION,
   TrustOutcome.INVALID_PUBLISHER_DOCUMENT,
+  TrustOutcome.UNANCHORED_PUBLISHER,
 ]);
 
 /**
@@ -120,6 +129,9 @@ export function createTrustPolicy(input = {}) {
   return {
     publishers: [...(input.publishers ?? [])],
     keys: { ...(input.keys ?? {}) },
+    // Document anchors: publisher id -> [{documentId, sequence}]. Recorded by
+    // `trust add --publisher-document`; consulted by acquisition trust.
+    documents: { ...(input.documents ?? {}) },
   };
 }
 

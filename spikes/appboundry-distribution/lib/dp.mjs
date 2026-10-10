@@ -153,7 +153,13 @@ export async function publishRelease(p) {
   };
 }
 
-/** Acquire the (single) artifact the CLI resolves for `any`/`any`, into `out`, with a receipt. */
-export function acquire({ url, releaseId, out, receipt, cwd }) {
-  return dp(['acquire', releaseId, '--registry', url, '--os', 'any', '--arch', 'any', '--out', out, ...(receipt ? ['--receipt', receipt] : [])], { cwd });
+/**
+ * Acquire the (single) artifact the CLI resolves for `any`/`any`, into `out`, with a receipt.
+ *
+ * `acquire` now enforces publisher trust by default. The legitimate-flow spikes here are about
+ * AppBoundry packaging, not trust, so they pass `--allow-untrusted` (integrity + signature only);
+ * pass `trusted: true` to exercise the default trusted path against the hermetic trust store.
+ */
+export function acquire({ url, releaseId, out, receipt, cwd, trusted = false }) {
+  return dp(['acquire', releaseId, '--registry', url, '--os', 'any', '--arch', 'any', '--out', out, ...(receipt ? ['--receipt', receipt] : []), ...(trusted ? [] : ['--allow-untrusted'])], { cwd });
 }

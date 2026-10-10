@@ -149,6 +149,9 @@ test('operator issues a credential; publisher claims the namespace, publishes an
   await mkdir(consumer);
   const out = path.join(consumer, 'widget');
   const receiptPath = path.join(consumer, 'receipt.json');
+  // Acquisition requires the consumer to have anchored the publisher.
+  const trusted = await cli(['trust', 'add', 'publisher://acme', '--publisher-document', f.doc]);
+  assert.equal(trusted.code, 0, trusted.stderr);
   const resolved = await cli(['resolve', 'product://acme/widget', '--os', 'linux', '--arch', 'x64', '--registry', url]);
   assert.equal(resolved.code, 0, resolved.stderr);
   const acquired = await cli(
@@ -156,6 +159,7 @@ test('operator issues a credential; publisher claims the namespace, publishes an
   );
   assert.equal(acquired.code, 0, acquired.stderr);
   assert.match(acquired.stdout, /\(verified\)/);
+  assert.match(acquired.stdout, /publisher publisher:\/\/acme trusted \(document\)/);
   assert.deepEqual(await readFile(out), f.bytes);
 
   const release = JSON.parse((await cli(['get', RELEASE(), '--registry', url])).stdout);
@@ -341,6 +345,7 @@ test('--require-auth-for-read: anonymous reads are refused, any valid credential
   assert.equal(anonymous.code, 1);
   assert.match(anonymous.stderr, /AUTHENTICATION_REQUIRED/);
 
+  assert.equal((await cli(['trust', 'add', 'publisher://acme', '--publisher-document', f.doc])).code, 0);
   const out = path.join(f.work, 'got');
   const ok = await cli(['acquire', RELEASE(), '--registry', url, '--os', 'linux', '--arch', 'x64', '--out', out], { token: reader });
   assert.equal(ok.code, 0, ok.stderr);

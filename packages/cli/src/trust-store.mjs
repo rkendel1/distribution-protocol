@@ -105,6 +105,9 @@ export function createTrustStore({ path: storePath = DEFAULT_TRUST_PATH } = {}) 
     return {
       publishers: Array.isArray(parsed.publishers) ? parsed.publishers : [],
       keys: parsed.keys && typeof parsed.keys === 'object' ? parsed.keys : {},
+      // Anchors are enforcement input for acquisition, so they must survive a
+      // load/save round trip rather than being silently dropped.
+      documents: parsed.documents && typeof parsed.documents === 'object' ? parsed.documents : {},
     };
   }
 
@@ -185,6 +188,7 @@ export function createTrustStore({ path: storePath = DEFAULT_TRUST_PATH } = {}) 
     const removed = state.publishers.includes(id);
     state.publishers = state.publishers.filter((p) => p !== id);
     delete state.keys[id];
+    delete state.documents?.[id];
     await save(state);
     return removed;
   }
