@@ -323,6 +323,7 @@ test('a missing file fails without throwing, and a later source can still win', 
   assert.equal(result.ok, true);
   assert.equal(result.attempts.length, 2);
   assert.equal(result.attempts[0].ok, false);
+  assert.match(result.attempts[0].reason, /no such artifact file/, 'a failed attempt records why it failed');
   assert.deepEqual(result.bytes, ARTIFACT_BYTES['hello.txt']);
 });
 

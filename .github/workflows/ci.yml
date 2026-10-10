@@ -36,6 +36,12 @@ jobs:
       - name: Test
         run: npm test
 
+      # Runs the commands in the README quick start verbatim (publish a real
+      # artifact to a local HTTP registry, acquire and verify it, then prove a
+      # tampered artifact is rejected), so the documented flow cannot rot.
+      - name: README quick start
+        run: bash scripts/smoke-quickstart.sh
+
       - name: Regenerate spec artifacts
         run: npm run generate:spec
 

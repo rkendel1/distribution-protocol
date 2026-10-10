@@ -331,6 +331,7 @@ export async function acquireArtifact(artifact, options = {}) {
       uri: source.uri,
       ok: result.ok,
       outcome: result.outcome,
+      ...(result.reason ? { reason: result.reason } : {}),
       ...(result.actual ? { actual: result.actual } : {}),
     });
 

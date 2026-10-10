@@ -12,7 +12,10 @@
  * accept it.
  */
 
-import { ProtocolError, ErrorCode } from '../../protocol/src/errors.mjs';
+import { Readable } from 'node:stream';
+
+import { ProtocolError, ErrorCode, ArtifactNotFoundError } from '../../protocol/src/errors.mjs';
+import { digestOfBytes, isDigest } from '../../protocol/src/artifact.mjs';
 import { verifyRelease } from '../../protocol/src/signing.mjs';
 import { resolveFromReleases } from '../../protocol/src/resolve.mjs';
 import { parsePublisherId } from '../../protocol/src/identifiers.mjs';
@@ -174,26 +177,122 @@ export class HttpRegistryClient {
   }
 
   /**
-   * Resolve by asking the registry, then confirming the answer locally.
+   * Upload artifact bytes under the digest the caller names.
    *
-   * The registry proposes; the client verifies. Resolution is recomputed from
-   * the verified release list so a registry cannot talk a consumer into a
-   * different selection than the protocol mandates.
+   * The registry checks the bytes against that digest and refuses a mismatch;
+   * this client does not need to trust its answer, because nothing a registry
+   * says about stored bytes is relied on later (downloads are re-verified).
+   *
+   * @param {string} digest
+   * @param {Uint8Array|AsyncIterable<Uint8Array>} source bytes or a byte stream
+   * @param {{size?: number}} [options] `size` is sent so an oversize upload is
+   *   refused before it is transmitted
+   * @returns {Promise<{created: boolean, digest: string, size: number}>}
+   */
+  async putArtifactStream(digest, source, { size } = {}) {
+    if (!isDigest(digest)) {
+      throw new ProtocolError(ErrorCode.BAD_REQUEST, `malformed digest ${String(digest)}`, { digest });
+    }
+    const isBytes = source instanceof Uint8Array;
+    const init = {
+      method: 'PUT',
+      headers: { 'content-type': 'application/octet-stream' },
+    };
+    if (isBytes) {
+      init.body = source;
+    } else {
+      // A stream body needs `duplex: 'half'`. The length is declared when known
+      // so the registry can refuse an oversize artifact before reading it.
+      init.body = Readable.toWeb(Readable.from(source));
+      init.duplex = 'half';
+      if (typeof size === 'number') init.headers['content-length'] = String(size);
+    }
+    const res = await this.fetch(`${this.baseUrl}/v1/artifacts/${encodeURIComponent(digest)}/content`, init);
+    if (!res.ok) throw await toError(res);
+    return res.json();
+  }
+
+  /**
+   * Upload artifact bytes held in memory; the digest is computed, not supplied.
+   * @param {Uint8Array} bytes
+   */
+  async putArtifact(bytes) {
+    return this.putArtifactStream(digestOfBytes(bytes), bytes);
+  }
+
+  /**
+   * Open stored artifact bytes as a stream.
+   *
+   * The stream is NOT verified here: verification is the acquirer's job, against
+   * the digest in the signed release. Throws ARTIFACT_NOT_FOUND when absent.
+   *
+   * @param {string} digest
+   * @returns {Promise<{size: number|null, stream: AsyncIterable<Uint8Array>}>}
+   */
+  async openArtifact(digest) {
+    const res = await this.fetch(`${this.baseUrl}/v1/artifacts/${encodeURIComponent(digest)}/content`);
+    if (res.status === 404) {
+      await res.body?.cancel().catch(() => {});
+      throw new ArtifactNotFoundError(`registry has no bytes for ${digest}`, { digest });
+    }
+    if (!res.ok) throw await toError(res);
+    if (!res.body) throw new ProtocolError(ErrorCode.ACQUISITION_FAILED, 'artifact response had no body', { digest });
+
+    const length = res.headers.get('content-length');
+    return {
+      size: length === null ? null : Number(length),
+      stream: (async function* read() {
+        const reader = res.body.getReader();
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) return;
+            if (value) yield new Uint8Array(value);
+          }
+        } finally {
+          await reader.cancel().catch(() => {});
+        }
+      })(),
+    };
+  }
+
+  /**
+   * Download artifact bytes into memory. Convenience for small artifacts; the
+   * result is unverified, exactly like {@link openArtifact}.
+   * @param {string} digest
+   * @returns {Promise<Uint8Array>}
+   */
+  async getArtifactBytes(digest) {
+    const { stream } = await this.openArtifact(digest);
+    const chunks = [];
+    let total = 0;
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+      total += chunk.length;
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return bytes;
+  }
+
+  /**
+   * Resolve a request against the registry's VERIFIED releases.
+   *
+   * The registry's own `/v1/resolve` answer is deliberately not used: selection
+   * is recomputed here from releases whose signatures this client has checked,
+   * so a registry cannot steer a consumer to a different release, artifact or
+   * digest than the protocol's rules produce from signed data. (The route stays
+   * in the API for lightweight clients that choose to trust it.)
    *
    * @param {{product: string, target?: object, capabilities?: string[]}} request
    */
   async resolve(request) {
-    const res = await this.fetch(`${this.baseUrl}/v1/resolve`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(request),
-    });
-    if (res.status === 404) {
-      const releases = await this.listReleases(request.product);
-      return resolveFromReleases(request, releases);
-    }
-    if (!res.ok) throw await toError(res);
-    return res.json();
+    const releases = await this.listReleases(request.product);
+    return resolveFromReleases(request, releases);
   }
 }
 

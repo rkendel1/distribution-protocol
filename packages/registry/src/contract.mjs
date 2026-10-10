@@ -24,6 +24,20 @@
  * @property {(request: object) => Promise<object>} resolve
  *   Resolve a product/target/capability request to a release + artifact.
  *
+ * Artifact CONTENT is an OPTIONAL capability, kept apart from the required
+ * methods because a registry that only indexes releases and leaves bytes to
+ * mirrors or CDNs is still a conformant registry:
+ *
+ * @typedef {object} ArtifactContent
+ * @property {(digest: string, stream: AsyncIterable<Uint8Array>, options?: {maxSize?: number}) => Promise<{created: boolean, digest: string, size: number}>} putArtifactStream
+ *   Store bytes under the digest the caller names. MUST hash the bytes and
+ *   store nothing unless they match (DIGEST_MISMATCH), MUST enforce the size
+ *   limit (ARTIFACT_TOO_LARGE), and MUST leave nothing behind on failure.
+ *   Re-uploading identical bytes is idempotent (`created: false`).
+ * @property {(digest: string) => Promise<{size: number|null, stream: AsyncIterable<Uint8Array>}>} openArtifact
+ *   Stream stored bytes. Throws ARTIFACT_NOT_FOUND when absent. The registry is
+ *   NOT trusted to return correct bytes: consumers verify the digest.
+ *
  * Publisher documents are a REQUIRED part of the contract, not an optional
  * capability. A registry that cannot distribute publisher documents cannot
  * bootstrap a consumer's trust, which would make every consumer copy public
@@ -60,6 +74,9 @@ export const REGISTRY_STATUS = Object.freeze({
   INVALID_SIGNATURE: 401,
   MANIFEST_VALIDATION_FAILED: 400,
   UNKNOWN_PUBLISHER_KEY: 403,
+  DIGEST_MISMATCH: 422,
+  ARTIFACT_TOO_LARGE: 413,
+  ARTIFACT_STORAGE_UNSUPPORTED: 501,
 });
 
 /**
@@ -84,6 +101,20 @@ export function missingRegistryMethods(candidate) {
     'listPublisherDocuments',
   ];
   return required.filter((name) => typeof candidate?.[name] !== 'function');
+}
+
+/**
+ * Whether a registry can store and serve artifact bytes.
+ *
+ * Optional by design: see {@link ArtifactContent}. Callers that need bytes (the
+ * CLI `publish --artifacts`, the HTTP content routes) check this and fail with
+ * a clear error rather than an obscure "not a function".
+ *
+ * @param {object} candidate
+ * @returns {boolean}
+ */
+export function supportsArtifactContent(candidate) {
+  return typeof candidate?.putArtifactStream === 'function' && typeof candidate?.openArtifact === 'function';
 }
 
 /**

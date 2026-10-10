@@ -76,6 +76,28 @@ can pass on state left behind by another.
 - listing returns every release, newest first, without leaking other products;
 - artifacts are retrievable by digest; unknown digests return null.
 
+### Artifact content (optional capability)
+
+A registry that stores artifact bytes must additionally pass the artifact
+content suite (`artifactContentSuite`), which runs unchanged against memory,
+filesystem and HTTP:
+
+- uploaded bytes come back identical, and re-uploading them is idempotent;
+- bytes that do not match the addressed digest are rejected and stored nowhere;
+- a corrupt re-upload cannot replace stored bytes;
+- an upload over the size limit is rejected and stored nowhere (the limit is
+  inclusive);
+- an unknown digest is `ARTIFACT_NOT_FOUND`;
+- a stream that fails mid-upload stores nothing;
+- uploading bytes does not by itself publish an artifact.
+
+Over HTTP (`artifact-http.test.mjs`) it also checks status codes, early rejection
+of a declared oversize body, cutting off an undeclared one while streaming, and
+that an abandoned upload leaves no partial file. The end-to-end test in the CLI
+package publishes a real artifact over HTTP and proves a registry that serves
+altered bytes, truncated bytes, or lies about resolution and metadata cannot
+make a client accept anything other than the bytes the publisher signed.
+
 ### Resolution
 
 - the newest matching release is selected;

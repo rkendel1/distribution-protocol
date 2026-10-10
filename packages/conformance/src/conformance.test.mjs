@@ -6,6 +6,7 @@ import path from 'node:path';
 
 import { MemoryRegistry, LocalRegistry } from '../../registry/src/index.mjs';
 import { registryConformanceSuite } from './registry-suite.mjs';
+import { artifactContentSuite } from './artifact-content-suite.mjs';
 
 /**
  * Each check gets a brand-new registry, so no check can pass because of state
@@ -84,6 +85,21 @@ for (const impl of IMPLEMENTATIONS) {
         await run();
       } finally {
         // Tear down only after this check has fully finished.
+        await harness.dispose();
+      }
+    });
+  }
+}
+
+// Artifact storage is an optional capability with its own suite; both reference
+// registries implement it, so both must pass it.
+for (const impl of IMPLEMENTATIONS) {
+  const harness = harnessFor(impl);
+  for (const { name, run } of artifactContentSuite({ createRegistry: harness.create, name: impl.name })) {
+    test(name, async () => {
+      try {
+        await run();
+      } finally {
         await harness.dispose();
       }
     });

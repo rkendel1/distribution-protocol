@@ -87,33 +87,63 @@ only `node:crypto`, and the CLI only `node:fs` and `node:http`.
 
 ## Quick start
 
+Publish a real artifact to a local HTTP registry, then download and verify it as
+a separate consumer. Run this from the repository root (after `npm install`).
+
+<!-- quickstart:start -->
 ```bash
-D=node\ packages/cli/bin/distribution.mjs   # the CLI
+REPO=$PWD
+D="node $REPO/packages/cli/bin/distribution.mjs"   # the CLI
+PORT=${PORT:-8787}
+cd "$(mktemp -d)"
 
-# 1. Generate a publisher key pair
+# 1. Build the artifacts. Any file works; the manifest pins each one by SHA-256.
+#    (examples/widget.manifest.json pins the five bytes "hello".)
+mkdir dist
+printf hello > dist/widget-macos-arm64     # file name = the artifact id
+printf hello > dist/widget-linux-x64
+
+# 2. Generate a publisher key pair, then sign the release.
 $D keygen --out publisher.pem
-
-# 2. Validate a manifest
-$D manifest validate examples/widget.manifest.json
-
-# 3. Sign it
-$D release sign examples/widget.manifest.json --key publisher.pem --out release.json
-
-# 4. Verify the release independently
+$D release sign "$REPO/examples/widget.manifest.json" --key publisher.pem --out release.json
 $D release verify release.json
 
-# 5. Publish to a local filesystem registry
-$D publish release.json --registry file://./registry
+# 3. Start a local registry (no authentication — keep it on localhost).
+$D serve --dir ./registry --port "$PORT" > serve.log 2>&1 &
+SERVER=$!
+until grep -q listening serve.log; do sleep 0.1; done
+REGISTRY=http://127.0.0.1:$PORT
 
-# 6. Republishing the identical release is idempotent
-$D publish release.json --registry file://./registry
+# 4. Publish: upload each artifact by digest, then publish the signed release.
+$D publish release.json --registry "$REGISTRY" --artifacts dist
 
-# 7. Resolve for a target
-$D resolve product://acme/widget --os macos --arch arm64 --registry file://./registry
+# 5. As a consumer: resolve, then download by digest and verify.
+$D resolve product://acme/widget --os linux --arch x64 --registry "$REGISTRY"
+$D acquire product://acme/widget@1.2.0 --registry "$REGISTRY" \
+  --os linux --arch x64 --out widget --receipt receipt.json
+cat widget; echo
+cat receipt.json
 
-# 8. Fetch the release back
-$D get product://acme/widget@1.2.0 --registry file://./registry
+# 6. The registry is not trusted. Corrupt the stored bytes and try again:
+#    verification fails, and nothing is written.
+printf HELLO > registry/artifacts/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin
+if $D acquire product://acme/widget@1.2.0 --registry "$REGISTRY" \
+     --os linux --arch x64 --out tampered; then
+  echo "UNEXPECTED: tampered bytes were accepted"; exit 1
+fi
+test ! -e tampered
+
+kill $SERVER
 ```
+<!-- quickstart:end -->
+
+Without a server, `--registry ./registry` uses a plain directory as the
+registry; every command above works the same way.
+
+The signed release names the artifact by digest and size only. **Where** the
+bytes live is the consumer's choice (here, the registry's
+`/v1/artifacts/<digest>/content` route), so the same signed release works from
+any registry or mirror. See [`spec/registry-api.md`](spec/registry-api.md).
 
 ## Packages
 
@@ -171,7 +201,7 @@ complete check.
 | --- | --- |
 | [`spec/protocol.md`](spec/protocol.md) | The model, the rules, the non-goals |
 | [`spec/canonicalization.md`](spec/canonicalization.md) | Byte-exact serialization rules |
-| [`spec/registry-api.md`](spec/registry-api.md) | The HTTP mapping |
+| [`spec/registry-api.md`](spec/registry-api.md) | The HTTP mapping, including digest-addressed artifact upload and download |
 | [`spec/conformance.md`](spec/conformance.md) | How to prove conformance |
 | [`spec/manifest.schema.json`](spec/manifest.schema.json) | The manifest contract (generated) |
 
