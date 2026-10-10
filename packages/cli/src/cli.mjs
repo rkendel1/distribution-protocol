@@ -455,11 +455,18 @@ async function runAcquire(positional, flags) {
   }
 
   const registry = await openRegistry(flags);
-  // `getRelease` verifies the release signature against the key it carries.
-  // That proves the signer HOLDS a key, not that anyone should believe them;
-  // publisher trust is evaluated separately below.
+  // A valid signature proves the signer HOLDS a key, not that anyone should
+  // believe them; publisher trust is evaluated separately below.
   const release = await registry.getRelease(releaseId);
   if (!release) return fail(`release not found: ${releaseId}`);
+
+  // SIGNATURE. Not every registry verifies on read (the filesystem and memory
+  // registries return what is stored), and a receipt says "signature verified",
+  // so acquire checks it itself rather than assuming the registry did.
+  const signature = verifyRelease(release);
+  if (!signature.valid) {
+    return fail(`SIGNATURE FAILURE — the release ${releaseId} does not verify: ${signature.reason}. Nothing was written.`);
+  }
 
   const request = { product: releaseId.slice(0, releaseId.lastIndexOf('@')) };
   request.target = { os: flags.os ?? 'any', arch: flags.arch ?? 'any' };
