@@ -9,7 +9,7 @@
  * redaction checks cover what a user would actually see.
  */
 
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
@@ -31,9 +31,18 @@ const digestOf = (bytes) => `sha256:${createHash('sha256').update(bytes).digest(
 /** Everything any process printed, for the redaction checks. */
 const OUTPUT = [];
 
+/**
+ * Hermetic user state. The CLI reads a per-user trust store (`~/.distribution`);
+ * if tests used the real one their results would depend on whatever happens to
+ * be on the machine, so every process gets an empty home of its own.
+ */
+const HOME = await mkdtemp(path.join(tmpdir(), 'dp-auth-home-'));
+after(() => rm(HOME, { recursive: true, force: true }));
+const HERMETIC = { HOME, USERPROFILE: HOME, DISTRIBUTION_TRUST_STORE: path.join(HOME, 'trust.json') };
+
 /** Run the CLI; never throws on a non-zero exit. `token` goes in the environment only. */
 async function cli(args, { token, env = {}, cwd } = {}) {
-  const childEnv = { ...process.env, DISTRIBUTION_TOKEN: token ?? '', ...env };
+  const childEnv = { ...process.env, ...HERMETIC, DISTRIBUTION_TOKEN: token ?? '', ...env };
   try {
     const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { env: childEnv, cwd });
     OUTPUT.push({ args, stdout, stderr });
@@ -49,7 +58,7 @@ async function cli(args, { token, env = {}, cwd } = {}) {
 async function startServer(t, dir, extraArgs = []) {
   const child = spawn(process.execPath, [BIN, 'serve', '--dir', dir, '--port', '0', ...extraArgs], {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, DISTRIBUTION_TOKEN: '' },
+    env: { ...process.env, ...HERMETIC, DISTRIBUTION_TOKEN: '' },
   });
   const log = { stdout: '', stderr: '' };
   child.stderr.on('data', (c) => { log.stderr += c; });
@@ -204,10 +213,12 @@ test('a credential holder who does not hold the owner key cannot take over the n
   assert.equal(res.code, 1);
   assert.match(res.stderr, /PUBLISHER_CONFLICT/);
 
-  // The registry still names the owner's key, not the attacker's.
-  const shown = await cli(['publisher', 'verify', 'publisher://acme', '--registry', url]);
-  assert.match(shown.stdout + shown.stderr, /key-1/);
-  assert.doesNotMatch(shown.stdout + shown.stderr, /evil-key/);
+  // The registry still names the owner's key, not the attacker's. Read the head
+  // document straight from the registry: no local trust policy is involved.
+  const head = await (await fetch(`${url}/v1/publishers/acme`)).json();
+  assert.deepEqual(head.document.keys.map((k) => k.id), ['key-1']);
+  assert.equal(head.document.sequence, 1);
+  assert.deepEqual(head, JSON.parse(await readFile(f.doc, 'utf8')), 'the stored head is exactly the owner\'s claim');
 });
 
 test('a release must be signed by a key the namespace declares', async (t) => {
