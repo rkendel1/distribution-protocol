@@ -3,8 +3,10 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
+  # Every branch push, not just the default branch, so work is checked on GitHub
+  # before a pull request exists. (A PR for the same branch then runs twice.)
   push:
-    branches: [master]
+    branches: ['**']
 
 permissions:
   contents: read
