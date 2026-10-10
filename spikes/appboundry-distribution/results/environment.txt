@@ -1,0 +1,7 @@
+date:                  2026-10-10T17:08:41Z
+node:                  v22.22.0
+distribution-protocol: 2a19acd397d08033015684e4d175a0b5dc5339b8  (Merge pull request #3 from rkendel1/feat/registry-auth-namespaces)
+appboundry:            a160d578ff6ef27d51a025ca8326de28a785bcdf  branch main
+synapse:               796a93d5f5368052a475cbe91745990a091dded6  branch main
+appboundry worktree:   0 modified/untracked files (must be 0)
+synapse worktree:      0 modified/untracked files (must be 0)

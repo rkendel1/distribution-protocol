@@ -1,0 +1,628 @@
+TAP version 13
+# Subtest: operator issues a credential; publisher claims the namespace, publishes and consumers acquire
+ok 1 - operator issues a credential; publisher claims the namespace, publishes and consumers acquire
+  ---
+  duration_ms: 1518.431595
+  type: 'test'
+  ...
+# Subtest: without a credential every write is refused with a clear error
+ok 2 - without a credential every write is refused with a clear error
+  ---
+  duration_ms: 902.416532
+  type: 'test'
+  ...
+# Subtest: a credential for another namespace is forbidden, and cannot squat or publish into this one
+ok 3 - a credential for another namespace is forbidden, and cannot squat or publish into this one
+  ---
+  duration_ms: 1624.208671
+  type: 'test'
+  ...
+# Subtest: a credential holder who does not hold the owner key cannot take over the namespace
+ok 4 - a credential holder who does not hold the owner key cannot take over the namespace
+  ---
+  duration_ms: 1249.238793
+  type: 'test'
+  ...
+# Subtest: a release must be signed by a key the namespace declares
+ok 5 - a release must be signed by a key the namespace declares
+  ---
+  duration_ms: 1599.533686
+  type: 'test'
+  ...
+# Subtest: a token on the command line is rejected, and never echoed
+ok 6 - a token on the command line is rejected, and never echoed
+  ---
+  duration_ms: 791.114532
+  type: 'test'
+  ...
+# Subtest: --token-file works, and a world-readable token file draws a warning
+ok 7 - --token-file works, and a world-readable token file draws a warning
+  ---
+  duration_ms: 1212.8084
+  type: 'test'
+  ...
+# Subtest: revoking a credential takes effect on the running server
+ok 8 - revoking a credential takes effect on the running server
+  ---
+  duration_ms: 1327.453069
+  type: 'test'
+  ...
+# Subtest: an expired credential is refused
+ok 9 - an expired credential is refused
+  ---
+  duration_ms: 2098.058549
+  type: 'test'
+  ...
+# Subtest: token list shows ids, namespaces and state, never secrets or hashes
+ok 10 - token list shows ids, namespaces and state, never secrets or hashes
+  ---
+  duration_ms: 1259.732758
+  type: 'test'
+  ...
+# Subtest: --require-auth-for-read: anonymous reads are refused, any valid credential may read
+ok 11 - --require-auth-for-read: anonymous reads are refused, any valid credential may read
+  ---
+  duration_ms: 1582.796506
+  type: 'test'
+  ...
+# Subtest: serve refuses unsafe configurations
+ok 12 - serve refuses unsafe configurations
+  ---
+  duration_ms: 534.670131
+  type: 'test'
+  ...
+# Subtest: the client will not send a credential over cleartext HTTP to a remote host
+ok 13 - the client will not send a credential over cleartext HTTP to a remote host
+  ---
+  duration_ms: 684.159906
+  type: 'test'
+  ...
+# Subtest: a malformed credential in the environment is rejected locally, without being printed
+ok 14 - a malformed credential in the environment is rejected locally, without being printed
+  ---
+  duration_ms: 403.854996
+  type: 'test'
+  ...
+# Subtest: the server's access log records which credential acted, never the secret
+ok 15 - the server's access log records which credential acted, never the secret
+  ---
+  duration_ms: 1281.583855
+  type: 'test'
+  ...
+# Subtest: no process ever printed a credential secret (except `token create`, once, on stdout)
+ok 16 - no process ever printed a credential secret (except `token create`, once, on stdout)
+  ---
+  duration_ms: 3.911761
+  type: 'test'
+  ...
+# Subtest: publish a real artifact to an HTTP registry, then resolve, download and verify it
+ok 17 - publish a real artifact to an HTTP registry, then resolve, download and verify it
+  ---
+  duration_ms: 1266.057584
+  type: 'test'
+  ...
+# Subtest: the signed manifest names no location: the same release works from a second registry
+ok 18 - the signed manifest names no location: the same release works from a second registry
+  ---
+  duration_ms: 1483.640043
+  type: 'test'
+  ...
+# Subtest: publishing is idempotent: a second publish uploads nothing and changes nothing
+ok 19 - publishing is idempotent: a second publish uploads nothing and changes nothing
+  ---
+  duration_ms: 1013.586224
+  type: 'test'
+  ...
+# Subtest: altered bytes fail verification even when the registry claims they are valid
+ok 20 - altered bytes fail verification even when the registry claims they are valid
+  ---
+  duration_ms: 1186.241225
+  type: 'test'
+  ...
+# Subtest: a truncated download fails verification
+ok 21 - a truncated download fails verification
+  ---
+  duration_ms: 951.843318
+  type: 'test'
+  ...
+# Subtest: bytes corrupted at rest in the registry fail verification
+ok 22 - bytes corrupted at rest in the registry fail verification
+  ---
+  duration_ms: 909.107713
+  type: 'test'
+  ...
+# Subtest: a registry cannot steer the client to a different artifact by lying in resolve or metadata
+ok 23 - a registry cannot steer the client to a different artifact by lying in resolve or metadata
+  ---
+  duration_ms: 1174.364445
+  type: 'test'
+  ...
+# Subtest: acquiring a release whose bytes were never uploaded fails clearly
+ok 24 - acquiring a release whose bytes were never uploaded fails clearly
+  ---
+  duration_ms: 798.950811
+  type: 'test'
+  ...
+# Subtest: publish --artifacts refuses a file that does not match the signed digest, before uploading anything
+ok 25 - publish --artifacts refuses a file that does not match the signed digest, before uploading anything
+  ---
+  duration_ms: 847.735482
+  type: 'test'
+  ...
+# Subtest: publish --artifacts reports a missing artifact file
+ok 26 - publish --artifacts reports a missing artifact file
+  ---
+  duration_ms: 598.882263
+  type: 'test'
+  ...
+# Subtest: an oversize artifact is rejected by the registry, the release is not published, nothing is left behind
+ok 27 - an oversize artifact is rejected by the registry, the release is not published, nothing is left behind
+  ---
+  duration_ms: 849.786856
+  type: 'test'
+  ...
+# Subtest: serve validates its arguments
+ok 28 - serve validates its arguments
+  ---
+  duration_ms: 267.877604
+  type: 'test'
+  ...
+# Subtest: multi-chunk stream verifies and returns the exact bytes
+ok 29 - multi-chunk stream verifies and returns the exact bytes
+  ---
+  duration_ms: 12.710418
+  type: 'test'
+  ...
+# Subtest: wantBytes:false verifies without returning or collecting bytes
+ok 30 - wantBytes:false verifies without returning or collecting bytes
+  ---
+  duration_ms: 0.469465
+  type: 'test'
+  ...
+# Subtest: a large artifact is hashed without being buffered whole
+ok 31 - a large artifact is hashed without being buffered whole
+  ---
+  duration_ms: 795.227389
+  type: 'test'
+  ...
+# Subtest: a large artifact streams into the cache without being buffered whole
+ok 32 - a large artifact streams into the cache without being buffered whole
+  ---
+  duration_ms: 3515.419816
+  type: 'test'
+  ...
+# Subtest: corrupted bytes fail as an integrity error and are never cached
+ok 33 - corrupted bytes fail as an integrity error and are never cached
+  ---
+  duration_ms: 5.355853
+  type: 'test'
+  ...
+# Subtest: a size that disagrees with correct bytes is an integrity failure
+ok 34 - a size that disagrees with correct bytes is an integrity failure
+  ---
+  duration_ms: 0.612835
+  type: 'test'
+  ...
+# Subtest: a stream that dies mid-transfer is a transient failure, closed and silent
+ok 35 - a stream that dies mid-transfer is a transient failure, closed and silent
+  ---
+  duration_ms: 1.367853
+  type: 'test'
+  ...
+# Subtest: a stream failure while filling the cache returns an outcome and leaves no partial file
+ok 36 - a stream failure while filling the cache returns an outcome and leaves no partial file
+  ---
+  duration_ms: 24.290857
+  type: 'test'
+  ...
+# Subtest: a cache pass that now returns different bytes is rejected, not cached
+ok 37 - a cache pass that now returns different bytes is rejected, not cached
+  ---
+  duration_ms: 6.770601
+  type: 'test'
+  ...
+# Subtest: a missing file fails without throwing, and a later source can still win
+ok 38 - a missing file fails without throwing, and a later source can still win
+  ---
+  duration_ms: 8.295096
+  type: 'test'
+  ...
+# Subtest: a real file streams through the default file transport and fills the cache
+ok 39 - a real file streams through the default file transport and fills the cache
+  ---
+  duration_ms: 13.798926
+  type: 'test'
+  ...
+# Subtest: upload, duplicate upload, download and HEAD
+ok 40 - upload, duplicate upload, download and HEAD
+  ---
+  duration_ms: 76.367145
+  type: 'test'
+  ...
+# Subtest: a missing artifact is 404 ARTIFACT_NOT_FOUND
+ok 41 - a missing artifact is 404 ARTIFACT_NOT_FOUND
+  ---
+  duration_ms: 13.145678
+  type: 'test'
+  ...
+# Subtest: a malformed digest is 400
+ok 42 - a malformed digest is 400
+  ---
+  duration_ms: 14.055069
+  type: 'test'
+  ...
+# Subtest: corrupted bytes are rejected with 422 and leave nothing behind
+ok 43 - corrupted bytes are rejected with 422 and leave nothing behind
+  ---
+  duration_ms: 16.030532
+  type: 'test'
+  ...
+# Subtest: a corrupt re-upload cannot overwrite a good artifact
+ok 44 - a corrupt re-upload cannot overwrite a good artifact
+  ---
+  duration_ms: 14.541499
+  type: 'test'
+  ...
+# Subtest: an oversize upload is refused up front when its length is declared
+ok 45 - an oversize upload is refused up front when its length is declared
+  ---
+  duration_ms: 14.858663
+  type: 'test'
+  ...
+# Subtest: an oversize upload with no declared length is cut off while streaming
+ok 46 - an oversize upload with no declared length is cut off while streaming
+  ---
+  duration_ms: 12.694866
+  type: 'test'
+  ...
+# Subtest: an upload abandoned mid-transfer leaves no partial file
+ok 47 - an upload abandoned mid-transfer leaves no partial file
+  ---
+  duration_ms: 51.186925
+  type: 'test'
+  ...
+# Subtest: a registry without artifact storage answers 501
+ok 48 - a registry without artifact storage answers 501
+  ---
+  duration_ms: 6.284869
+  type: 'test'
+  ...
+# Subtest: unsupported methods are 405
+ok 49 - unsupported methods are 405
+  ---
+  duration_ms: 18.874755
+  type: 'test'
+  ...
+# Subtest: a multi-megabyte artifact round-trips through the client by stream
+ok 50 - a multi-megabyte artifact round-trips through the client by stream
+  ---
+  duration_ms: 215.6819
+  type: 'test'
+  ...
+# Subtest: the client surfaces registry rejections by stable code
+ok 51 - the client surfaces registry rejections by stable code
+  ---
+  duration_ms: 22.372298
+  type: 'test'
+  ...
+# Subtest: HttpRegistryClient: artifact content: uploaded bytes come back identical
+ok 52 - HttpRegistryClient: artifact content: uploaded bytes come back identical
+  ---
+  duration_ms: 9.318086
+  type: 'test'
+  ...
+# Subtest: HttpRegistryClient: artifact content: re-uploading identical bytes is idempotent
+ok 53 - HttpRegistryClient: artifact content: re-uploading identical bytes is idempotent
+  ---
+  duration_ms: 26.169071
+  type: 'test'
+  ...
+# Subtest: HttpRegistryClient: artifact content: bytes that do not match the digest are rejected and stored nowhere
+ok 54 - HttpRegistryClient: artifact content: bytes that do not match the digest are rejected and stored nowhere
+  ---
+  duration_ms: 7.816008
+  type: 'test'
+  ...
+# Subtest: HttpRegistryClient: artifact content: a corrupt re-upload cannot replace stored bytes
+ok 55 - HttpRegistryClient: artifact content: a corrupt re-upload cannot replace stored bytes
+  ---
+  duration_ms: 10.309101
+  type: 'test'
+  ...
+# Subtest: HttpRegistryClient: artifact content: an upload over the size limit is rejected and stored nowhere
+ok 56 - HttpRegistryClient: artifact content: an upload over the size limit is rejected and stored nowhere
+  ---
+  duration_ms: 7.751476
+  type: 'test'
+  ...
+# Subtest: HttpRegistryClient: artifact content: an upload at exactly the size limit is accepted
+ok 57 - HttpRegistryClient: artifact content: an upload at exactly the size limit is accepted
+  ---
+  duration_ms: 6.523809
+  type: 'test'
+  ...
+# Subtest: HttpRegistryClient: artifact content: an unknown digest is not found
+ok 58 - HttpRegistryClient: artifact content: an unknown digest is not found
+  ---
+  duration_ms: 13.62093
+  type: 'test'
+  ...
+# Subtest: HttpRegistryClient: artifact content: a stream that fails mid-upload stores nothing
+ok 59 - HttpRegistryClient: artifact content: a stream that fails mid-upload stores nothing
+  ---
+  duration_ms: 8.642861
+  type: 'test'
+  ...
+# Subtest: HttpRegistryClient: artifact content: uploading bytes does not publish an artifact
+ok 60 - HttpRegistryClient: artifact content: uploading bytes does not publish an artifact
+  ---
+  duration_ms: 9.707528
+  type: 'test'
+  ...
+# Subtest: A1/A3: a write without credentials is 401 AUTHENTICATION_REQUIRED, with a challenge
+ok 61 - A1/A3: a write without credentials is 401 AUTHENTICATION_REQUIRED, with a challenge
+  ---
+  duration_ms: 76.13085
+  type: 'test'
+  ...
+# Subtest: A3: every kind of bad credential gets the SAME 401 INVALID_CREDENTIALS
+ok 62 - A3: every kind of bad credential gets the SAME 401 INVALID_CREDENTIALS
+  ---
+  duration_ms: 53.378328
+  type: 'test'
+  ...
+# Subtest: A3: duplicate Authorization headers are refused
+ok 63 - A3: duplicate Authorization headers are refused
+  ---
+  duration_ms: 7.860044
+  type: 'test'
+  ...
+# Subtest: A3: an expired credential is 401 CREDENTIALS_EXPIRED, only for a correct secret
+ok 64 - A3: an expired credential is 401 CREDENTIALS_EXPIRED, only for a correct secret
+  ---
+  duration_ms: 34.066675
+  type: 'test'
+  ...
+# Subtest: A3: a revoked credential stops working immediately
+ok 65 - A3: a revoked credential stops working immediately
+  ---
+  duration_ms: 13.12385
+  type: 'test'
+  ...
+# Subtest: A2: credentials are checked BEFORE the body is read
+ok 66 - A2: credentials are checked BEFORE the body is read
+  ---
+  duration_ms: 14.341206
+  type: 'test'
+  ...
+# Subtest: A1: unsupported write methods are refused (401 unauthenticated, 405 authenticated)
+ok 67 - A1: unsupported write methods are refused (401 unauthenticated, 405 authenticated)
+  ---
+  duration_ms: 36.669382
+  type: 'test'
+  ...
+# Subtest: A5: by default anyone may read and resolve without a credential
+ok 68 - A5: by default anyone may read and resolve without a credential
+  ---
+  duration_ms: 52.16279
+  type: 'test'
+  ...
+# Subtest: A5: with the authenticated read policy, reads need a valid credential (any grant)
+ok 69 - A5: with the authenticated read policy, reads need a valid credential (any grant)
+  ---
+  duration_ms: 33.353937
+  type: 'test'
+  ...
+# Subtest: authorized publication succeeds end to end
+ok 70 - authorized publication succeeds end to end
+  ---
+  duration_ms: 19.286285
+  type: 'test'
+  ...
+# Subtest: N1 ATTACK: a credential for another namespace cannot publish into this one
+ok 71 - N1 ATTACK: a credential for another namespace cannot publish into this one
+  ---
+  duration_ms: 17.604303
+  type: 'test'
+  ...
+# Subtest: N1 ATTACK: the path cannot be used to smuggle a release for another namespace
+ok 72 - N1 ATTACK: the path cannot be used to smuggle a release for another namespace
+  ---
+  duration_ms: 20.510778
+  type: 'test'
+  ...
+# Subtest: N2/N4 ATTACK: a credential for another namespace cannot touch this namespace's publisher document
+ok 73 - N2/N4 ATTACK: a credential for another namespace cannot touch this namespace's publisher document
+  ---
+  duration_ms: 19.882742
+  type: 'test'
+  ...
+# Subtest: N2 ATTACK: a document cannot be filed under another publisher's path
+ok 74 - N2 ATTACK: a document cannot be filed under another publisher's path
+  ---
+  duration_ms: 8.324004
+  type: 'test'
+  ...
+# Subtest: N3: only a credential with a write grant may upload artifact bytes
+ok 75 - N3: only a credential with a write grant may upload artifact bytes
+  ---
+  duration_ms: 18.528835
+  type: 'test'
+  ...
+# Subtest: a read-only credential cannot write anything
+ok 76 - a read-only credential cannot write anything
+  ---
+  duration_ms: 15.128176
+  type: 'test'
+  ...
+# Subtest: N4: a credential cannot grant itself, or anyone, anything through the API
+ok 77 - N4: a credential cannot grant itself, or anyone, anything through the API
+  ---
+  duration_ms: 24.973238
+  type: 'test'
+  ...
+# Subtest: O1: the first document claims a namespace; a competing claim is a conflict
+ok 78 - O1: the first document claims a namespace; a competing claim is a conflict
+  ---
+  duration_ms: 32.580268
+  type: 'test'
+  ...
+# Subtest: O1: a lineage cannot be started in the middle
+ok 79 - O1: a lineage cannot be started in the middle
+  ---
+  duration_ms: 31.629559
+  type: 'test'
+  ...
+# Subtest: O2 ATTACK: a token holder who does not hold the owner key cannot take over the namespace
+ok 80 - O2 ATTACK: a token holder who does not hold the owner key cannot take over the namespace
+  ---
+  duration_ms: 17.95225
+  type: 'test'
+  ...
+# Subtest: O2: the owner can hand the namespace to a new key by signing the successor
+ok 81 - O2: the owner can hand the namespace to a new key by signing the successor
+  ---
+  duration_ms: 34.548108
+  type: 'test'
+  ...
+# Subtest: O2 ATTACK: a gap, a wrong predecessor and a competing document at the same sequence are conflicts
+ok 82 - O2 ATTACK: a gap, a wrong predecessor and a competing document at the same sequence are conflicts
+  ---
+  duration_ms: 26.260738
+  type: 'test'
+  ...
+# Subtest: O2 ATTACK: a revoked or rotated-out key cannot hand the namespace to someone else
+ok 83 - O2 ATTACK: a revoked or rotated-out key cannot hand the namespace to someone else
+  ---
+  duration_ms: 26.831962
+  type: 'test'
+  ...
+# Subtest: O3 ATTACK: replaying an old document is a harmless no-op that cannot roll ownership back
+ok 84 - O3 ATTACK: replaying an old document is a harmless no-op that cannot roll ownership back
+  ---
+  duration_ms: 37.013128
+  type: 'test'
+  ...
+# Subtest: O4: a release for an unclaimed namespace is refused
+ok 85 - O4: a release for an unclaimed namespace is refused
+  ---
+  duration_ms: 9.59822
+  type: 'test'
+  ...
+# Subtest: O4 ATTACK: a token holder cannot publish a release signed by a key the namespace does not declare
+ok 86 - O4 ATTACK: a token holder cannot publish a release signed by a key the namespace does not declare
+  ---
+  duration_ms: 24.584785
+  type: 'test'
+  ...
+# Subtest: O4 ATTACK: a release cannot borrow the owner's key NAME or fingerprint claim
+ok 87 - O4 ATTACK: a release cannot borrow the owner's key NAME or fingerprint claim
+  ---
+  duration_ms: 29.092116
+  type: 'test'
+  ...
+# Subtest: O4 ATTACK: a revoked or rotated-out key cannot publish a NEW release
+ok 88 - O4 ATTACK: a revoked or rotated-out key cannot publish a NEW release
+  ---
+  duration_ms: 56.803075
+  type: 'test'
+  ...
+# Subtest: O5 ATTACK: published releases cannot be changed, even by the owner
+ok 89 - O5 ATTACK: published releases cannot be changed, even by the owner
+  ---
+  duration_ms: 27.236053
+  type: 'test'
+  ...
+# Subtest: an attacker with their own namespace cannot touch another namespace's releases
+ok 90 - an attacker with their own namespace cannot touch another namespace's releases
+  ---
+  duration_ms: 30.044638
+  type: 'test'
+  ...
+# Subtest: A4: no credential or hash ever appears in a response, a log entry, or stored registry data
+ok 91 - A4: no credential or hash ever appears in a response, a log entry, or stored registry data
+  ---
+  duration_ms: 65.484701
+  type: 'test'
+  ...
+# Subtest: A4: credentials in the query string are never read
+ok 92 - A4: credentials in the query string are never read
+  ---
+  duration_ms: 6.891301
+  type: 'test'
+  ...
+# Subtest: A4: an unexpected server error does not echo internals
+ok 93 - A4: an unexpected server error does not echo internals
+  ---
+  duration_ms: 8.461169
+  type: 'test'
+  ...
+# Subtest: the token file stores only a hash, with owner-only permissions, and reloads on change
+ok 94 - the token file stores only a hash, with owner-only permissions, and reloads on change
+  ---
+  duration_ms: 7.614206
+  type: 'test'
+  ...
+# Subtest: a token cannot be created for a malformed namespace
+ok 95 - a token cannot be created for a malformed namespace
+  ---
+  duration_ms: 0.401765
+  type: 'test'
+  ...
+# Subtest: the client authenticates writes and the registry round-trips through it
+ok 96 - the client authenticates writes and the registry round-trips through it
+  ---
+  duration_ms: 22.930977
+  type: 'test'
+  ...
+# Subtest: the client keeps its credential out of errors, inspection and serialization
+ok 97 - the client keeps its credential out of errors, inspection and serialization
+  ---
+  duration_ms: 7.070642
+  type: 'test'
+  ...
+# Subtest: the client refuses a malformed credential, and cleartext HTTP to a remote host, without echoing it
+ok 98 - the client refuses a malformed credential, and cleartext HTTP to a remote host, without echoing it
+  ---
+  duration_ms: 0.608998
+  type: 'test'
+  ...
+# Subtest: the client does not follow a redirect while holding a credential
+ok 99 - the client does not follow a redirect while holding a credential
+  ---
+  duration_ms: 2.744766
+  type: 'test'
+  ...
+# Subtest: library registries keep their open behaviour unless ownership is enabled
+ok 100 - library registries keep their open behaviour unless ownership is enabled
+  ---
+  duration_ms: 6.539096
+  type: 'test'
+  ...
+# Subtest: the in-memory and filesystem registries enforce ownership identically
+ok 101 - the in-memory and filesystem registries enforce ownership identically
+  ---
+  duration_ms: 61.247763
+  type: 'test'
+  ...
+# Subtest: concurrent successors cannot both be admitted against the same head
+ok 102 - concurrent successors cannot both be admitted against the same head
+  ---
+  duration_ms: 7.042741
+  type: 'test'
+  ...
+# Subtest: the filesystem registry serializes concurrent successors the same way
+ok 103 - the filesystem registry serializes concurrent successors the same way
+  ---
+  duration_ms: 34.892327
+  type: 'test'
+  ...
+1..103
+# tests 103
+# suites 0
+# pass 103
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18210.083075

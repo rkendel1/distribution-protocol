@@ -1,0 +1,11 @@
+root: /home/user/appboundry
+.wasm paths: 19 (19 regular files + 0 symlinks to files)   unique contents: 17   uncompilable: 0
+      9  raw numeric exports (no memory ABI)
+      5  AppBoundry JSON ABI (appport_alloc/appport_result_len), no imports
+      5  raw exports + host imports
+
+root: /home/user/synapse
+.wasm paths: 4043 (2809 regular files + 1234 symlinks to files)   unique contents: 1546   uncompilable: 0
+   3104  Synapse skill ABI v2 (synapse_alloc/synapse_skill_invoke)
+    934  no exports at all
+      5  Synapse capability ABI (cap_alloc/invoke)

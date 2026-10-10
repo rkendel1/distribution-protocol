@@ -1,0 +1,67 @@
+
+ RUN  v3.2.7 /home/user/appboundry
+
+ ✓ packages/appboundry/test/pr204-appboundry-package.test.ts > PR204: @appport/appboundry canonical npm package > builds an independently certifiable application-bundle/1 AppBoundry.app 84ms
+ ✓ packages/appboundry/test/pr204-appboundry-package.test.ts > PR204: @appport/appboundry canonical npm package > keeps artifact certification distinct from provider availability 42ms
+ ✓ packages/appboundry/test/pr204-appboundry-package.test.ts > PR204: @appport/appboundry canonical npm package > certifies copied artifacts without source or build tooling 35ms
+ ✓ packages/appboundry/test/pr204-appboundry-package.test.ts > PR204: @appport/appboundry canonical npm package > fails certification when undeclared material is added to the artifact 27ms
+ ✓ packages/cli/test/application-conformance.test.ts > conforming applications > admits the shipped Rust-produced portal artifact 74ms
+ok  packaged coordtool.app (com.example.coordtool@1.0.0, sha256:16438068b9c5a9ae19b3312d402dcb5a5a464541d0e419d9f56bd71db962239f)
+Browser upload: coordtool.appbundle
+Application capability conformance
+ok  AppPort application com.example.coordtool
+ok  AppBoundry ApplicationId com.example.coordtool
+ok  execution mode self
+ok  artifact sha256:3a92e9d58e0a6d1ac72fc33afcb9f9201380d57fbbbd1a2e64e4abae85bbab0c
+ok  coordtool.forms@1 (op_c019aedf87802e78)
+Capability conformance: PASS
+ ✓ packages/appboundry/test/pr204-appboundry-package.test.ts > PR204: @appport/appboundry canonical npm package > exposes explicit canonical product build and certify commands 43ms
+ ✓ packages/appboundry/test/pr204-appboundry-package.test.ts > PR204: @appport/appboundry canonical npm package > builds the current repository application instead of the AppBoundry platform 96ms
+ok  packaged coordtool.app (com.example.coordtool@1.0.0, sha256:3ead01506a488620c822222fbbc8ef99dd26af4cd813b887ad537b64ff1eb1e2)
+Browser upload: coordtool.appbundle
+Application capability conformance
+ok  AppPort application com.example.coordtool
+ok  AppBoundry ApplicationId com.example.coordtool
+ok  execution mode self
+ok  artifact sha256:3a92e9d58e0a6d1ac72fc33afcb9f9201380d57fbbbd1a2e64e4abae85bbab0c
+ok  coordtool.forms@1 (op_87531b6819f58548)
+Capability conformance: PASS
+ ✓ packages/appboundry/test/pr204-appboundry-package.test.ts > PR204: @appport/appboundry canonical npm package > verifies the artifact whose packaged identity matches the repository 14ms
+ ✓ packages/appboundry/test/pr204-appboundry-package.test.ts > PR204: @appport/appboundry canonical npm package > ships the workspace ignore template in the npm package 11ms
+ ✓ packages/cli/test/application-conformance.test.ts > conforming applications > admits a freshly built artifact regardless of declared provenance 143ms
+ ✓ packages/cli/test/application-conformance.test.ts > non-conforming artifacts, one boundary at a time > ARTIFACT_NOT_EXECUTABLE: a well-formed manifest over bytes no runtime can instantiate 3ms
+ ✓ packages/cli/test/application-conformance.test.ts > non-conforming artifacts, one boundary at a time > ARTIFACT_HASH_MISMATCH: bytes changed without changing the declared hash 41ms
+ ✓ packages/cli/test/application-conformance.test.ts > non-conforming artifacts, one boundary at a time > MANIFEST_INVALID: identity no longer addresses its own manifest 47ms
+ ✓ packages/cli/test/application-conformance.test.ts > non-conforming artifacts, one boundary at a time > MANIFEST_INVALID: a required contract field is removed 69ms
+ ✓ packages/cli/test/application-conformance.test.ts > non-conforming artifacts, one boundary at a time > CAPABILITY_INVALID: a self-consistent manifest whose capability is not operable 47ms
+ ✓ packages/cli/test/application-conformance.test.ts > non-conforming artifacts, one boundary at a time > MANIFEST_INVALID: contract rules are enforced through the manifest parser 47ms
+ ✓ packages/cli/test/application-conformance.test.ts > non-conforming artifacts, one boundary at a time > rejects a repository that is not an application at all, without reading it 8ms
+ ✓ packages/appboundry/test/pr206-artifact-to-platform-compatibility.test.ts > PR206: certifiable AppBoundry artifact to unmodified platform proof > builds, certifies, deploys, executes, recovers, and rejects tampering across the .app boundary 575ms
+ ✓ packages/cli/test/application-conformance.test.ts > the two halves of the definition > same bytes, broken contract: not an application 64ms
+ ✓ packages/cli/test/application-conformance.test.ts > the two halves of the definition > valid contract and artifact, with no repository, source or toolchain: an application 93ms
+ ✓ packages/cli/test/application-conformance.test.ts > conformance is upstream of deployment and independent of surface > holds after publication, source deletion and identity-only resolution 247ms
+ ✓ packages/cli/test/application-conformance.test.ts > conformance is upstream of deployment and independent of surface > decides membership without reference to any protocol surface 21ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition runtime > discovers, binds, invokes, disconnects, reconnects, and revokes regardless of location labels 9ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition runtime > discovers, binds, invokes, disconnects, reconnects, and revokes regardless of location labels 2ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition runtime > discovers, binds, invokes, disconnects, reconnects, and revokes regardless of location labels 2ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition runtime > discovers, binds, invokes, disconnects, reconnects, and revokes regardless of location labels 3ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition runtime > rejects incompatible bindings before invocation and keeps provider reachability distinct from publication 3ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition runtime > keeps authorization as a separate runtime decision and allows one application to both consume and provide 12ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition runtime > installs a wasm application package and composes it with a connected provider through the same bind/invoke surfaces 20ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition runtime > classifies missing, invalid, and initialization failures at the provider boundary 13ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition runtime > invokes a checked-in WASM package through normal discovery and binding 12ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition CLI > publishes providers, registers consumer requirements, shows capabilities/providers, binds, and revokes from a runtime snapshot 25ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition CLI > installs, inspects, and lists wasm application packages in the composition CLI 17ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition CLI > fails instead of silently resetting malformed runtime snapshots 6ms
+ ✓ packages/appboundry/test/pr235-capability-composition-runtime.test.ts > PR235: AppBoundry capability composition CLI > fails when revoking an unknown binding 3ms
+ ✓ packages/sdk/test/pr18-application-package.test.ts > PR18: AppPort application package SDK integration > packages the SDK application definition into the canonical AppBoundry bundle contract 12ms
+ ✓ packages/sdk/test/pr18-application-package.test.ts > PR18: AppPort application package SDK integration > derives and resolves a portable content-addressed package identity 7ms
+ ✓ packages/sdk/test/pr18-application-package.test.ts > PR18: AppPort application package SDK integration > verifies immutable package identity and artifact bytes during resolution 3ms
+ ✓ packages/sdk/test/pr18-application-package.test.ts > PR18: AppPort application package SDK integration > validates the application before emitting package files 0ms
+ ✓ packages/core/test/pr50-application-host-boundary.test.ts > PR50: application/host boundary contract > keeps application-owned package inputs limited to immutable manifest and WASM bytes 7ms
+
+ Test Files  6 passed (6)
+      Tests  40 passed (40)
+   Start at  17:08:59
+   Duration  3.64s (transform 2.38s, setup 0ms, collect 5.78s, tests 2.00s, environment 1ms, prepare 679ms)
+

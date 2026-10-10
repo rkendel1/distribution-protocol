@@ -1,0 +1,70 @@
+
+ RUN  v3.2.7 /home/user/distribution-protocol/spikes/appboundry-distribution
+
+ ✓ 03-capability-reuse.spike.test.mjs > P3a todos: existing AppBoundry WASM provider → distribution → separate consumer > the provider crosses the distribution protocol byte-for-byte and verified 4ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3a todos: existing AppBoundry WASM provider → distribution → separate consumer > a SEPARATE consumer discovers, binds to and invokes the acquired provider; the result is the wasm's real output 11ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3a todos: existing AppBoundry WASM provider → distribution → separate consumer > the consumer needs neither the registry, the network, nor the artifact path once the provider is installed 172ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3a todos: existing AppBoundry WASM provider → distribution → separate consumer > FINDING: with the repo's REAL todos contract (4 capabilities, schemas) + its REAL wasm, every invocation fails output validation 28ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3/P4 contract and version compatibility between consumer and provider > a minimal hand-assembled (labelled fixture) provider is carried and runs: control for the failure cases below 1ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3/P4 contract and version compatibility between consumer and provider > a consumer requiring a different capability VERSION finds no provider and cannot bind (exact-version rule, no ranges) 2ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3/P4 contract and version compatibility between consumer and provider > a consumer pinning a different contract_ref cannot bind, even at the same name@version 1ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3/P4 contract and version compatibility between consumer and provider > a consumer that does not declare the requirement cannot bind to it 0ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3/P4 contract and version compatibility between consumer and provider > revoking the provider after binding turns invocation into PROVIDER_REVOKED (no stale access) 1ms
+ ✓ 03-capability-reuse.spike.test.mjs > P4 an acquired artifact verifies but fails to execute / the provider errors > wasm that needs host imports: distribution OK, conformance OK, install OK — fails only at invocation, with a masked cause 524ms
+ ✓ 03-capability-reuse.spike.test.mjs > P4 an acquired artifact verifies but fails to execute / the provider errors > wasm missing the AppBoundry ABI exports: installs, then fails at invocation with a masked cause 521ms
+ ✓ 03-capability-reuse.spike.test.mjs > P4 an acquired artifact verifies but fails to execute / the provider errors > provider returns a pointer outside its memory: invocation error (masked), host unaffected 519ms
+ ✓ 03-capability-reuse.spike.test.mjs > P4 an acquired artifact verifies but fails to execute / the provider errors > provider returns valid JSON that violates its own declared output schema: rejected by the contract, not passed to the consumer 542ms
+ ✓ 03-capability-reuse.spike.test.mjs > P4 an acquired artifact verifies but fails to execute / the provider errors > an unavailable (offline) provider: invocation reports PROVIDER_DISCONNECTED 493ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3b Synapse: one real, unmodified Synapse WASM module > the Synapse module is carried UNCHANGED: the wasm inside the acquired package is byte-identical to Synapse's file 2ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3b Synapse: one real, unmodified Synapse WASM module > AppBoundry admits it: loader, package identity and conformance all pass (the gate checks hash + compilation, not the call ABI) 4ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3b Synapse: one real, unmodified Synapse WASM module > BOUNDARY MISMATCH: on AppBoundry's existing runtime the call fails — the module speaks Synapse's ABI (synapse_skill_invoke), not AppBoundry's (appport_alloc/exported_*) 5ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3b Synapse: one real, unmodified Synapse WASM module > SPIKE ADAPTER (not an existing integration): the same acquired module runs through AppBoundry's existing pluggable `wasmRuntime` hook using Synapse's documented ABI v2 5ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3b Synapse: one real, unmodified Synapse WASM module > BOUNDARY: the hook is ONE runtime per composition runtime and the manifest has no ABI field, so the two kinds of provider cannot coexist 4ms
+ ✓ 03-capability-reuse.spike.test.mjs > P3b Synapse: one real, unmodified Synapse WASM module > a Synapse-reported error ({ok:false}) surfaces as INVOCATION_FAILED (cause masked), never as a success 18ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.1 publish the real AppBoundry artifact as a distribution artifact > the registry now holds exactly the real .appbundle bytes, addressed by their sha256 8ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.1 publish the real AppBoundry artifact as a distribution artifact > NO AppBoundry-specific packaging was needed: the distribution manifest is the generic schema 0ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.2 acquire into a clean directory, verify, and compare bytes > acquire succeeds anonymously (reads are public) and reports the digest as verified 1ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.2 acquire into a clean directory, verify, and compare bytes > the acquired file is byte-identical to the original AppBoundry.appbundle 6ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.2 acquire into a clean directory, verify, and compare bytes > release signature verifies independently, and the receipt validates against the release 295ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.2 acquire into a clean directory, verify, and compare bytes > P2.3 the acquired file is accepted by the existing AppBoundry loader and conformance gate, with the original package identity 52ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.2 acquire into a clean directory, verify, and compare bytes > P2.3 identity: two digests describe the same application and nothing in either repo links them 21ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.2 acquire into a clean directory, verify, and compare bytes > P2.4 EXECUTE: the acquired artifact installs and the portal wasm runs in the composition runtime 20ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.5 the multi-file .app DIRECTORY form > both files publish under ONE signed release; artifacts stored by digest 1ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.5 the multi-file .app DIRECTORY form > GAP: the CLI can fetch only ONE artifact of a release (no --artifact <id>, no "all"); it silently picks the lowest id 189ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.5 the multi-file .app DIRECTORY form > using the existing LIBRARY primitives, both files are acquired, each verified against the signed digest, and reassemble a directory AppBoundry accepts 75ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2.5 the multi-file .app DIRECTORY form > P2.4 EXECUTE on the platform host: `appport app deploy` runs the reassembled .app and answers applications.list@1 111ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2/P4 distribution-side failure and trust boundaries (real CLI) > tampered bytes at rest in the registry → acquire fails, nothing is written, AppBoundry is never reached 172ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2/P4 distribution-side failure and trust boundaries (real CLI) > registry unavailable (failed acquisition) → clean failure, no partial file 148ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2/P4 distribution-side failure and trust boundaries (real CLI) > an edited release (signature no longer covers the manifest) fails `release verify` 167ms
+ ✓ 02-distribution-roundtrip.spike.test.mjs > P2/P4 distribution-side failure and trust boundaries (real CLI) > BOUNDARY: an attacker's own registry can serve a validly signed, self-consistent look-alike and `acquire` accepts it 1160ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.1 artifact structure and manifest schema (real AppBoundry.app) > the .app directory is exactly { application.wasm, manifest } 2ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.1 artifact structure and manifest schema (real AppBoundry.app) > the manifest has exactly the keys the parser admits (closed schema) 4ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.1 artifact structure and manifest schema (real AppBoundry.app) > the .appbundle is a single-file envelope carrying the same two files 9ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.2/P1.3 how the wasm is identified and bound to the manifest > manifest.artifact.hash is the sha256 of application.wasm (hex, no prefix) 5ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.2/P1.3 how the wasm is identified and bound to the manifest > packageIdentity.digest = sha256(canonicalJson(manifest minus packageIdentity)) — a SECOND, different digest 21ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.2/P1.3 how the wasm is identified and bound to the manifest > there is NO signature or publisher identity anywhere in the manifest 1ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.2/P1.3 how the wasm is identified and bound to the manifest > conformance (the artifact-only admission gate) admits it 24ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.2/P1.3 how the wasm is identified and bound to the manifest > certify (canonical-AppBoundry check) passes on the .app DIRECTORY form 9ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.2b provenance: is the checked-in artifact what AppBoundry's own builder produces today? > OBSERVED: `buildAppBoundryArtifact` output differs from the checked-in AppBoundry.app (different wasm, different source version, different identity) 37ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.4 how the runtime loads and executes the artifact > the loader accepts the directory form AND the single-file .appbundle, and reports the same identity 17ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.4 how the runtime loads and executes the artifact > the loader also accepts the manifest.json / app.wasm aliases (certify does NOT) 18ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.4 how the runtime loads and executes the artifact > the real wasm obeys the invocation ABI: zero imports; memory + appport_alloc + appport_result_len + one export per capability 5ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.4 how the runtime loads and executes the artifact > the composition runtime installs it as a wasm provider and (separately) a consumer of its 5 requirements 12ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.5/P1.6 capabilities, dependencies, permissions and external state > permissions are per-capability scopes in the contract; networking is declared denied; state is external (FeltDB) 3ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.5/P1.6 capabilities, dependencies, permissions and external state > OBSERVED: in the composition runtime the portal wasm returns a workflow PLAN naming its required providers; it does not execute them 11ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.7 / P4 malformed, incompatible, incomplete and untrusted artifacts (existing handling) > missing package → PACKAGE_MISSING 1ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.7 / P4 malformed, incompatible, incomplete and untrusted artifacts (existing handling) > missing manifest → INVALID_ARTIFACT 5ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.7 / P4 malformed, incompatible, incomplete and untrusted artifacts (existing handling) > malformed manifest JSON → INVALID_ARTIFACT 5ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.7 / P4 malformed, incompatible, incomplete and untrusted artifacts (existing handling) > missing wasm entrypoint file → WASM_ARTIFACT_MISSING 13ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.7 / P4 malformed, incompatible, incomplete and untrusted artifacts (existing handling) > tampered wasm bytes → INVALID_ARTIFACT (hash mismatch) and conformance ARTIFACT_HASH_MISMATCH 16ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.7 / P4 malformed, incompatible, incomplete and untrusted artifacts (existing handling) > edited CONTRACT → rejected by the contract-fingerprint check; conformance MANIFEST_INVALID 9ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.7 / P4 malformed, incompatible, incomplete and untrusted artifacts (existing handling) > edited NON-contract field → rejected by the package-identity check 8ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.7 / P4 malformed, incompatible, incomplete and untrusted artifacts (existing handling) > unsupported package protocol version → rejected 5ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.7 / P4 malformed, incompatible, incomplete and untrusted artifacts (existing handling) > bytes that are not wasm but whose hash is declared correctly → admitted by the hash check, rejected as ARTIFACT_NOT_EXECUTABLE and at install 4ms
+ ✓ 01-appboundry-contract.spike.test.mjs > P1.7 / P4 malformed, incompatible, incomplete and untrusted artifacts (existing handling) > a signature is never required or checked: a self-consistent package built by anyone is admitted 4ms
+
+ Test Files  3 passed (3)
+      Tests  61 passed (61)
+   Start at  17:08:41
+   Duration  14.16s (transform 1.91s, setup 0ms, collect 2.94s, tests 10.30s, environment 1ms, prepare 234ms)
+
