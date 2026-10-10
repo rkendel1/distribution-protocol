@@ -242,3 +242,36 @@ test('the standalone receipt command makes no verification claim', async (t) => 
   assert.equal(res.code, 0, res.stderr);
   assert.equal('verification' in JSON.parse(res.stdout), false);
 });
+
+test('an invalid release signature is refused, even with --allow-untrusted and a registry that does not verify', async (t) => {
+  const f = await fixture(t);
+  const registry = await makeRegistry(f.work, 'real', f.acme);
+  await f.consumerTrusts();
+  // Filesystem registries hand back whatever is on disk. Alter the signed
+  // manifest after publication so the signature no longer covers it.
+  const file = path.join(registry, 'releases', 'acme', 'widget', '1.0.0.json');
+  const release = JSON.parse(await readFile(file, 'utf8'));
+  release.manifest.product.name = 'Widget (altered after signing)';
+  await writeJson(file, release);
+
+  for (const extra of [[], ['--allow-untrusted']]) {
+    const res = await acquire(f, registry, extra);
+    assert.equal(res.code, 1, extra.join(' ') || 'trusted');
+    assert.match(res.stderr, /SIGNATURE FAILURE/);
+    assert.doesNotMatch(res.stdout, /verified|trusted/);
+    await assertNothingLeft(f);
+  }
+});
+
+test('a publisher that is trusted, but not THIS publisher, does not help', async (t) => {
+  const f = await fixture(t);
+  const registry = await makeRegistry(f.work, 'real', f.acme);
+  const other = makePublisher('other');
+  const otherDoc = path.join(f.work, 'other.json');
+  await writeJson(otherDoc, other.claim);
+  assert.equal((await cli(['trust', 'add', other.id, '--publisher-document', otherDoc], { trust: f.trust })).code, 0);
+  const res = await acquire(f, registry);
+  assert.equal(res.code, 1);
+  assert.match(res.stderr, /TRUST FAILURE \[UNKNOWN_PUBLISHER\]/);
+  await assertNothingLeft(f);
+});
