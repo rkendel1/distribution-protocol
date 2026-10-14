@@ -20,8 +20,8 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { chmod, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { ErrorCode, ProtocolError } from '../../protocol/src/errors.mjs';
-import { parsePublisherId } from '../../protocol/src/identifiers.mjs';
+import { ErrorCode, ProtocolError } from '@distribution-protocol/protocol';
+import { parsePublisherId } from '@distribution-protocol/protocol';
 
 /** The shape of a well-formed token. */
 export const TOKEN_PATTERN = /^dpt_([a-f0-9]{16})\.([A-Za-z0-9_-]{43})$/;

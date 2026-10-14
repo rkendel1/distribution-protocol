@@ -27,7 +27,3 @@ export {
   missingRegistryMethods,
   supportsArtifactContent,
 } from './contract.mjs';
-
-// The publisher conformance suite, so any implementation (or a third party)
-// can be held to the same bar.
-export { publisherRegistrySuite } from './publisher-suite.mjs';

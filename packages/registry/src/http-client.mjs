@@ -14,11 +14,11 @@
 
 import { Readable } from 'node:stream';
 
-import { ProtocolError, ErrorCode, ArtifactNotFoundError } from '../../protocol/src/errors.mjs';
-import { digestOfBytes, isDigest } from '../../protocol/src/artifact.mjs';
-import { verifyRelease } from '../../protocol/src/signing.mjs';
-import { resolveFromReleases } from '../../protocol/src/resolve.mjs';
-import { parsePublisherId } from '../../protocol/src/identifiers.mjs';
+import { ProtocolError, ErrorCode, ArtifactNotFoundError } from '@distribution-protocol/protocol';
+import { digestOfBytes, isDigest } from '@distribution-protocol/protocol';
+import { verifyRelease } from '@distribution-protocol/protocol';
+import { resolveFromReleases } from '@distribution-protocol/protocol';
+import { parsePublisherId } from '@distribution-protocol/protocol';
 import { TOKEN_PATTERN } from './auth.mjs';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', '[::1]', 'localhost']);

@@ -2,27 +2,51 @@
   "name": "@distribution-protocol/cli",
   "version": "1.0.0",
   "description": "The `distribution` command line client for the Distribution Protocol",
+  "keywords": [
+    "distribution-protocol",
+    "cli",
+    "software-distribution",
+    "signing",
+    "supply-chain",
+    "verify"
+  ],
+  "homepage": "https://github.com/rkendel1/distribution-protocol/tree/master/packages/cli#readme",
+  "bugs": {
+    "url": "https://github.com/rkendel1/distribution-protocol/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rkendel1/distribution-protocol.git",
+    "directory": "packages/cli"
+  },
+  "license": "MIT",
+  "author": "Distribution Protocol contributors",
   "type": "module",
   "main": "./src/cli.mjs",
   "bin": {
     "distribution": "./bin/distribution.mjs"
   },
   "exports": {
-    ".": "./src/cli.mjs"
+    ".": "./src/cli.mjs",
+    "./package.json": "./package.json"
   },
   "files": [
     "bin",
-    "src"
+    "src",
+    "!src/**/*.test.mjs"
   ],
   "scripts": {
-    "test": "node --test src/*.test.mjs"
+    "test": "node --test src/*.test.mjs",
+    "prepublishOnly": "node ../../scripts/guard-publish.mjs"
   },
   "dependencies": {
-    "@distribution-protocol/protocol": "1.0.0",
-    "@distribution-protocol/registry": "1.0.0"
+    "@distribution-protocol/protocol": "^1.0.0",
+    "@distribution-protocol/registry": "^1.0.0"
   },
-  "license": "MIT",
   "engines": {
     "node": ">=18.17"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

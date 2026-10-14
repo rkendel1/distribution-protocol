@@ -21,7 +21,7 @@ import { MemoryRegistry } from '../../registry/src/memory-registry.mjs';
 import { LocalRegistry } from '../../registry/src/local-registry.mjs';
 import { HttpRegistryClient } from '../../registry/src/http-client.mjs';
 import { createRegistryHandler } from '../../registry/src/http.mjs';
-import { publisherRegistrySuite } from '../../registry/src/publisher-suite.mjs';
+import { publisherRegistrySuite } from './publisher-suite.mjs';
 import { PUBLISHER, makePublisherDocument } from './fixtures.mjs';
 import {
   TrustOutcome,

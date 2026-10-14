@@ -56,8 +56,8 @@
  *   verification, so a registry that can only return "latest" is incomplete.
  */
 
-import { canonicalize } from '../../protocol/src/canonical.mjs';
-import { orderReleases } from '../../protocol/src/resolve.mjs';
+import { canonicalize } from '@distribution-protocol/protocol';
+import { orderReleases } from '@distribution-protocol/protocol';
 
 /**
  * Errors a registry raises, and how they map to HTTP status codes.

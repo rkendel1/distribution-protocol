@@ -147,6 +147,12 @@ export async function acquireFromSource({
     return { ok: false, outcome: wrapped.name, digest, uri, reason: wrapped.message, kind: wrapped.kind };
   }
 
+  // The signed release states how many bytes to expect. A source that sends more
+  // is lying, and an unbounded stream would exhaust memory or disk before the
+  // digest could ever be checked, so stop reading at the first excess byte.
+  const expectedSize = size ?? artifact?.size;
+  const bounded = typeof expectedSize === 'number' ? limitStream(stream, expectedSize) : stream;
+
   // Hash while streaming. When the caller wants the bytes back, tee the stream
   // so one pass both hashes and collects — a stream cannot be read twice.
   // Default is to RETURN the bytes; `wantBytes: false` exists only for callers
@@ -165,12 +171,23 @@ export async function acquireFromSource({
       yield chunk;
     }
   }
-  const observed = collected ? tee(stream) : stream;
+  const observed = collected ? tee(bounded) : bounded;
 
   let result;
   try {
     result = await hashStream(observed);
   } catch (err) {
+    if (err instanceof StreamTooLong) {
+      return {
+        ok: false,
+        outcome: AcquisitionOutcome.SIZE_MISMATCH,
+        digest,
+        size: err.received,
+        uri,
+        kind: 'integrity',
+        reason: `artifact at ${uri} sent more than the ${expectedSize} bytes the release declares`,
+      };
+    }
     // A stream that dies mid-transfer is a transport failure, not an integrity
     // failure: we never saw the complete artifact, so we cannot say it was wrong.
     const wrapped = asTransportError(err, uri);
@@ -193,7 +210,6 @@ export async function acquireFromSource({
     };
   }
 
-  const expectedSize = size ?? artifact?.size;
   if (typeof expectedSize === 'number' && result.size !== expectedSize) {
     // Size is an additional integrity/resource check. The digest already proved
     // content identity, so this can only fire when metadata disagrees with
@@ -220,7 +236,11 @@ export async function acquireFromSource({
     // buffer, which is what keeps large artifacts off the heap.
     let stored;
     try {
-      stored = await artifactCache.putStream(digest, await transports.forUri(uri).acquire(uri, { signal, baseDir }));
+      const again = await transports.forUri(uri).acquire(uri, { signal, baseDir });
+      stored = await artifactCache.putStream(
+        digest,
+        typeof expectedSize === 'number' ? limitStream(again, expectedSize) : again,
+      );
     } catch (err) {
       // The first pass already verified this source, so a failure here is the
       // transfer or the disk, not the content. `putStream` removes its temp file
@@ -237,6 +257,24 @@ export async function acquireFromSource({
   if (artifactCache && bytes) await artifactCache.put(bytes);
 
   return { ok: true, outcome: AcquisitionOutcome.VERIFIED, digest, size: result.size, uri, bytes };
+}
+
+/** Thrown by {@link limitStream} when a source sends more than it declared. */
+class StreamTooLong extends Error {
+  constructor(received) {
+    super('stream exceeded its declared size');
+    this.received = received;
+  }
+}
+
+/** Pass chunks through, failing as soon as more than `max` bytes have arrived. */
+async function* limitStream(source, max) {
+  let received = 0;
+  for await (const chunk of source) {
+    received += chunk.length;
+    if (received > max) throw new StreamTooLong(received);
+    yield chunk;
+  }
 }
 
 /** Concatenate byte chunks into one buffer. */

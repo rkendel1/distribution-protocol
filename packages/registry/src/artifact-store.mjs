@@ -14,8 +14,8 @@
 
 import { createHash } from 'node:crypto';
 
-import { ErrorCode, ProtocolError } from '../../protocol/src/errors.mjs';
-import { isDigest } from '../../protocol/src/artifact.mjs';
+import { ErrorCode, ProtocolError } from '@distribution-protocol/protocol';
+import { isDigest } from '@distribution-protocol/protocol';
 
 /** Default ceiling for one artifact upload: 1 GiB. */
 export const DEFAULT_MAX_ARTIFACT_BYTES = 1024 * 1024 * 1024;

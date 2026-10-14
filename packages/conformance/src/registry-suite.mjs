@@ -9,7 +9,7 @@
  * storage, filesystem storage, or an HTTP client talking to a remote registry.
  */
 
-import { canonicalize } from '../../protocol/src/canonical.mjs';
+import { canonicalize } from '@distribution-protocol/protocol';
 import { makeManifest, makeRelease, PRODUCT } from './fixtures.mjs';
 
 function assert(condition, message) {

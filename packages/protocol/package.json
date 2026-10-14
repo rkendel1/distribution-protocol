@@ -2,19 +2,46 @@
   "name": "@distribution-protocol/protocol",
   "version": "1.0.0",
   "description": "Distribution Protocol: canonical identity, manifests, signing, resolution and acquisition",
+  "keywords": [
+    "distribution-protocol",
+    "software-distribution",
+    "signing",
+    "sha256",
+    "ed25519",
+    "supply-chain",
+    "verification",
+    "canonical-json"
+  ],
+  "homepage": "https://github.com/rkendel1/distribution-protocol/tree/master/packages/protocol#readme",
+  "bugs": {
+    "url": "https://github.com/rkendel1/distribution-protocol/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rkendel1/distribution-protocol.git",
+    "directory": "packages/protocol"
+  },
+  "license": "MIT",
+  "author": "Distribution Protocol contributors",
   "type": "module",
   "main": "./src/index.mjs",
   "exports": {
-    ".": "./src/index.mjs"
+    ".": "./src/index.mjs",
+    "./package.json": "./package.json"
   },
+  "sideEffects": false,
   "files": [
-    "src"
+    "src",
+    "!src/**/*.test.mjs"
   ],
   "scripts": {
-    "test": "node --test src/*.test.mjs"
+    "test": "node --test src/*.test.mjs",
+    "prepublishOnly": "node ../../scripts/guard-publish.mjs"
   },
-  "license": "MIT",
   "engines": {
     "node": ">=18.17"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -12,16 +12,16 @@
  */
 
 import assert from 'node:assert/strict';
-import { canonicalize } from '../../protocol/src/canonical.mjs';
-import { generatePublisherKeypair } from '../../protocol/src/signing.mjs';
+import { canonicalize } from '@distribution-protocol/protocol';
+import { generatePublisherKeypair } from '@distribution-protocol/protocol';
 import {
   documentIdOf,
   rotatePublisherKey,
   verifyPublisherDocumentSignature,
   verifyPublisherLineage,
-} from '../../protocol/src/index.mjs';
-import { missingRegistryMethods } from './contract.mjs';
-import { PUBLISHER, makePublisherDocument } from '../../conformance/src/fixtures.mjs';
+} from '@distribution-protocol/protocol';
+import { missingRegistryMethods } from '@distribution-protocol/registry';
+import { PUBLISHER, makePublisherDocument } from './fixtures.mjs';
 
 /**
  * Build the publisher conformance suite for one registry implementation.

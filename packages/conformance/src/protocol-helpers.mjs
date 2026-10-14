@@ -22,7 +22,7 @@ export {
   validateReceipt,
   productId,
   publisherId,
-} from '../../protocol/src/index.mjs';
+} from '@distribution-protocol/protocol';
 
 export {
   makeManifest,

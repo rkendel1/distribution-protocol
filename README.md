@@ -78,18 +78,23 @@ depend on where the bytes came from.
 ## Install
 
 ```bash
-npm install
-npm test
+npm install --global @distribution-protocol/cli     # the `distribution` command
+npm install @distribution-protocol/protocol          # the library
+npm install @distribution-protocol/registry          # registries (memory, filesystem, HTTP)
+npm install --save-dev @distribution-protocol/conformance
 ```
 
-Requires Node 18.17+. There are no runtime dependencies — the protocol uses
-only `node:crypto`, and the CLI only `node:fs` and `node:http`.
+Requires Node 18.17+. ESM only. There are no runtime dependencies — the protocol
+uses only `node:crypto`, and the CLI only `node:fs` and `node:http`.
+
+To work on the protocol itself, clone this repository and run `npm install && npm test`.
 
 ## Quick start
 
 Run a registry that requires credentials, publish a signed artifact to it as its
 owner, then acquire and verify it as an anonymous consumer. Run this from the
-repository root (after `npm install`).
+repository root (after `npm install`); with the CLI installed globally, replace
+`$D` with `distribution`.
 
 <!-- quickstart:start -->
 ```bash
@@ -303,6 +308,17 @@ marketplace UI, payments, subscriptions, advertising, centralized accounts, AI
 agents, execution environments, app runtimes, package managers, container
 runtimes, global registry, or proprietary hosting platform. Those belong above
 or beside the protocol — which is exactly why the protocol is worth having.
+
+## Security
+
+Please report vulnerabilities privately; see [`SECURITY.md`](SECURITY.md). The
+reference registry server is deliberately small: it speaks plain HTTP, has no
+rate limiting, and is meant to sit behind a TLS-terminating proxy.
+
+## Releasing
+
+Maintainers publish with `npm run publish:packages` (see
+[`RELEASING.md`](RELEASING.md)).
 
 ## License
 

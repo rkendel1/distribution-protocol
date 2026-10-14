@@ -28,17 +28,41 @@ import {
   PublisherKeyError,
   PublisherConflictError,
   SignatureError,
-} from '../../protocol/src/errors.mjs';
-import { assertValidManifest, releaseIdOf } from '../../protocol/src/validate.mjs';
-import { verifyRelease, keyIdOf } from '../../protocol/src/signing.mjs';
-import { documentIdOf, verifyPublisherDocumentSignature } from '../../protocol/src/publisher.mjs';
-import { resolveFromReleases } from '../../protocol/src/resolve.mjs';
-import { parseProductId, parsePublisherId } from '../../protocol/src/identifiers.mjs';
-import { digestHex, digestOfBytes, isDigest } from '../../protocol/src/artifact.mjs';
-import { canonicalize } from '../../protocol/src/canonical.mjs';
+} from '@distribution-protocol/protocol';
+import { assertValidManifest, releaseIdOf } from '@distribution-protocol/protocol';
+import { verifyRelease, keyIdOf } from '@distribution-protocol/protocol';
+import { documentIdOf, verifyPublisherDocumentSignature } from '@distribution-protocol/protocol';
+import { resolveFromReleases } from '@distribution-protocol/protocol';
+import { isValidVersion, parseProductId, parsePublisherId } from '@distribution-protocol/protocol';
+import { digestHex, digestOfBytes, isDigest } from '@distribution-protocol/protocol';
+import { canonicalize } from '@distribution-protocol/protocol';
 import { orderReleases } from './contract.mjs';
 import { consumeVerified, DEFAULT_MAX_ARTIFACT_BYTES } from './artifact-store.mjs';
 import { assertPublisherAdmission, assertReleaseAdmission, createMutex, instant } from './namespace-policy.mjs';
+
+/**
+ * Create `file` with `payload` only if it does not exist, atomically.
+ *
+ * The bytes go to a temp file beside the target and are hard-linked into place:
+ * `link` fails with EEXIST instead of replacing, and a reader can never observe
+ * a half-written file. A crash mid-write leaves only an ignorable `.partial`,
+ * not a truncated release that would block re-publication forever.
+ *
+ * @returns {Promise<boolean>} true if this call created the file
+ */
+async function writeExclusive(file, payload) {
+  const temp = path.join(path.dirname(file), `.${path.basename(file)}.${randomBytes(6).toString('hex')}.partial`);
+  await writeFile(temp, payload, { flag: 'wx', mode: 0o644 });
+  try {
+    await link(temp, file);
+    return true;
+  } catch (err) {
+    if (err.code === 'EEXIST') return false;
+    throw err;
+  } finally {
+    await rm(temp, { force: true }).catch(() => {});
+  }
+}
 
 export class LocalRegistry {
   /**
@@ -127,13 +151,8 @@ export class LocalRegistry {
     }
 
     await mkdir(dir, { recursive: true });
-    const created = await writeFile(file, `${JSON.stringify(envelope, null, 2)}\n`, { flag: 'wx' })
-      .then(() => true)
-      .catch((err) => {
-        // Already present: identical content is idempotent, not a conflict.
-        if (err.code === 'EEXIST') return false;
-        throw err;
-      });
+    // Already present: identical content is idempotent, not a conflict.
+    const created = await writeExclusive(file, `${JSON.stringify(envelope, null, 2)}\n`);
 
     return { created, documentId, sequence };
   }
@@ -198,6 +217,10 @@ export class LocalRegistry {
    * @returns {Promise<{created: boolean, releaseId: string}>}
    */
   async publishRelease(release) {
+    return this.lock(() => this.#publishRelease(release));
+  }
+
+  async #publishRelease(release) {
     assertValidManifest(release?.manifest);
 
     const { valid, reason } = verifyRelease(release);
@@ -229,10 +252,7 @@ export class LocalRegistry {
     const payload = `${JSON.stringify(release, null, 2)}\n`;
 
     // Exclusive create: an existing file is never overwritten.
-    try {
-      await writeFile(file, payload, { flag: 'wx' });
-    } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
+    if (!(await writeExclusive(file, payload))) {
       const existing = JSON.parse(await readFile(file, 'utf8'));
       // Idempotent only when the manifest bytes are identical.
       if (canonicalize(existing.manifest) === canonicalize(release.manifest)) {
@@ -263,10 +283,8 @@ export class LocalRegistry {
         null,
         2,
       )}\n`;
-      await writeFile(file, body, { flag: 'wx' }).catch((err) => {
-        // A concurrent writer creating the same digest first is fine.
-        if (err.code !== 'EEXIST') throw err;
-      });
+      // A concurrent writer creating the same digest first is fine.
+      await writeExclusive(file, body);
     }
   }
 
@@ -277,6 +295,10 @@ export class LocalRegistry {
    */
   async getRelease(releaseId) {
     const { namespace, slug, version } = splitReleaseId(releaseId);
+    // The version becomes a file name. Anything that is not a semantic version
+    // (`../../x`, an absolute path, a NUL) has no release and must never reach
+    // the filesystem.
+    if (!isValidVersion(version)) return null;
     const file = path.join(this.releasesDir, namespace, slug, `${version}.json`);
     try {
       return JSON.parse(await readFile(file, 'utf8'));

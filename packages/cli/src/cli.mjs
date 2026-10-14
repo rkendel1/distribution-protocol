@@ -26,7 +26,7 @@
  * Exit codes: 0 success, 1 failure, 2 usage error.
  */
 
-import { createReadStream } from 'node:fs';
+import { createReadStream, readFileSync } from 'node:fs';
 import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createHash, createPrivateKey, createPublicKey } from 'node:crypto';
 import path from 'node:path';
@@ -63,7 +63,7 @@ import {
   revokePublisherKey,
   documentIdOf,
   TrustOutcome,
-} from '../../protocol/src/index.mjs';
+} from '@distribution-protocol/protocol';
 import {
   LocalRegistry,
   HttpRegistryClient,
@@ -73,8 +73,10 @@ import {
   DEFAULT_MAX_ARTIFACT_BYTES,
   TokenStore,
   parseDuration,
-} from '../../registry/src/index.mjs';
+} from '@distribution-protocol/registry';
 import { createTrustStore, DEFAULT_TRUST_PATH } from './trust-store.mjs';
+
+const PACKAGE_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 const USAGE = `distribution — a client for the Distribution Protocol
 
@@ -111,15 +113,32 @@ const USAGE = `distribution — a client for the Distribution Protocol
                                     issue a credential (printed once; only a hash is kept)
   registry token list|revoke <id> --dir <path>
                                     list credentials / revoke one
+  receipt <release-id> --registry <url>
+                                    print a release receipt (makes no verification claim;
+                                    use acquire --receipt for a verified one)
+  keygen [--out <key.pem>]          generate a signing key pair (never overwrites)
+
+  publisher create <publisher-id> --out <key.pem> --document <doc.json> [--key-id <id>]
+                                    make a key and the signed document that claims a namespace
   publisher publish <doc.json> --registry <url>
                                     claim a namespace or publish its next document
+  publisher verify <doc.json>       verify a publisher document's signature
+  publisher keys <doc.json>         list the keys a document declares
+  publisher rotate <doc.json> --key <new-key-id> --sign-with <current-key-id>
+        [--key-file <new-key.pem>]  hand the namespace to a new key
+  publisher revoke <doc.json> --key <key-id> --sign-with <key-id> --key-file <key.pem>
+                                    revoke a key
 
+  trust add <publisher-id> --publisher-document <doc.json>
+        | --key-id <id> --public-key <pem>
+                                    decide whom you trust (anchored out of band)
+  trust list | show <publisher-id> | remove <publisher-id> | path
+                                    inspect or edit your trust store
+
+Trust store: ~/.distribution/trust.json (override: DISTRIBUTION_TRUST_STORE or --trust).
 Credentials: set DISTRIBUTION_TOKEN or pass --token-file <path>. A token is never
 accepted as a command-line value. Sent only over https:// or to localhost unless
 --allow-insecure-http.
-  receipt <release-id>              print a release receipt (makes no verification claim;
-                                    use acquire --receipt for a verified one)
-  keygen                            generate a publisher key pair
 
 Exit codes: 0 success, 1 failure, 2 usage error.`;
 
@@ -227,6 +246,11 @@ async function readJson(file) {
  */
 export async function run(argv) {
   const [command, subcommand, ...rest] = argv;
+
+  if (command === '--version' || command === '-v' || command === 'version') {
+    out(PACKAGE_VERSION);
+    return 0;
+  }
 
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     out(USAGE);
@@ -908,7 +932,7 @@ async function runPublisher(action, positional, flags) {
       // permissions. It never appears in the document or in stdout. The public
       // half is always written alongside so a consumer can pin it.
       if (typeof flags.out === 'string') {
-        await writeFile(flags.out, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
+        await writePrivateKey(flags.out, privateKey.export({ type: 'pkcs8', format: 'pem' }));
         await writeFile(`${flags.out}.pub`, publicKey.export({ type: 'spki', format: 'pem' }));
         out(`private key -> ${flags.out}  (keep secret)`);
         out(`public key  -> ${flags.out}.pub`);
@@ -1058,7 +1082,7 @@ case 'rotate': {
       let newKeyPath = null;
       if (typeof flags.out === 'string') {
         newKeyPath = `${flags.out}.${newKeyId}.pem`;
-        await writeFile(newKeyPath, generated.privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
+        await writePrivateKey(newKeyPath, generated.privateKey.export({ type: 'pkcs8', format: 'pem' }));
       }
 
       let next;
@@ -1223,6 +1247,21 @@ async function emitDocumentAsync(envelope, verb, flags, notes) {
   return 0;
 }
 
+/**
+ * Write a private key, owner-only, and never over an existing file: silently
+ * replacing a key would orphan every identity and release it ever signed.
+ */
+async function writePrivateKey(file, pem) {
+  try {
+    await writeFile(file, pem, { mode: 0o600, flag: 'wx' });
+  } catch (err) {
+    if (err.code === 'EEXIST') {
+      throw new Error(`refusing to overwrite existing file ${file}; choose another --out or remove it deliberately`);
+    }
+    throw err;
+  }
+}
+
 async function runKeygen(flags) {
   const { publicKey, privateKey } = generatePublisherKeypair();
   const pub = publicKey.export({ type: 'spki', format: 'pem' });
@@ -1230,7 +1269,7 @@ async function runKeygen(flags) {
 
   if (flags.out && flags.out !== true) {
     // The private key is written with owner-only permissions.
-    await writeFile(flags.out, priv, { mode: 0o600 });
+    await writePrivateKey(flags.out, priv);
     await writeFile(`${flags.out}.pub`, pub);
     out(`private key -> ${flags.out}`);
     out(`public key  -> ${flags.out}.pub`);

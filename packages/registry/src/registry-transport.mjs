@@ -16,12 +16,12 @@ import {
   PermanentTransportError,
   TransportError,
   ErrorCode,
-} from '../../protocol/src/index.mjs';
-import { isDigest } from '../../protocol/src/artifact.mjs';
+} from '@distribution-protocol/protocol';
+import { isDigest } from '@distribution-protocol/protocol';
 
 /**
  * @param {{openArtifact: (digest: string) => Promise<{stream: AsyncIterable<Uint8Array>}>}} registry
- * @returns {import('../../protocol/src/transport.mjs').Transport}
+ * @returns {import('@distribution-protocol/protocol').Transport}
  */
 export function registryTransport(registry) {
   return {

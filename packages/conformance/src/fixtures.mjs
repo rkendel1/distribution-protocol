@@ -8,15 +8,15 @@
 
 import { createHash, createPrivateKey, createPublicKey } from 'node:crypto';
 
-import { generatePublisherKeypair, signRelease } from '../../protocol/src/signing.mjs';
+import { generatePublisherKeypair, signRelease } from '@distribution-protocol/protocol';
 import {
   createPublisherDocument,
   exportPublicKey,
   signPublisherDocument,
-} from '../../protocol/src/publisher.mjs';
-import { createTrustPolicy } from '../../protocol/src/trust.mjs';
-import { digestOfBytes } from '../../protocol/src/artifact.mjs';
-import { productId, publisherId } from '../../protocol/src/identifiers.mjs';
+} from '@distribution-protocol/protocol';
+import { createTrustPolicy } from '@distribution-protocol/protocol';
+import { digestOfBytes } from '@distribution-protocol/protocol';
+import { productId, publisherId } from '@distribution-protocol/protocol';
 
 /** Stable pseudo-random bytes, derived from a label so tests never flake. */
 export function fixtureBytes(label) {

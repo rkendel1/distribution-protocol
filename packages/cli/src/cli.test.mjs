@@ -160,3 +160,18 @@ test('canonicalize prints exactly the bytes that get signed', async (t) => {
   assert.ok(!/[\n\r\t]/.test(result.stdout.trim()), 'canonical output must be a single line');
   assert.ok(result.stdout.trim().startsWith('{"artifacts":'), 'keys must be sorted');
 });
+test('key generation never overwrites an existing private key', async (t) => {
+  const work = await mkdtemp(path.join(tmpdir(), 'dp-cli-'));
+  t.after(() => rm(work, { recursive: true, force: true }));
+  const keyPath = path.join(work, 'publisher.pem');
+
+  assert.equal((await cli(['keygen', '--out', keyPath])).code, 0);
+  const original = await readFile(keyPath, 'utf8');
+
+  for (const args of [['keygen', '--out', keyPath], ['publisher', 'create', 'publisher://acme', '--out', keyPath]]) {
+    const again = await cli(args);
+    assert.notEqual(again.code, 0, args.join(' '));
+    assert.match(again.stderr, /refusing to overwrite/);
+  }
+  assert.equal(await readFile(keyPath, 'utf8'), original);
+});

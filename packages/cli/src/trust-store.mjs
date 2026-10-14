@@ -20,10 +20,10 @@ import { createPublicKey } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
-import { createTrustPolicy } from '../../protocol/src/trust.mjs';
-import { exportPublicKey, importPublicKey, keyFingerprint, documentIdOf } from '../../protocol/src/publisher.mjs';
-import { isPublisherId, normalizeIdentifier } from '../../protocol/src/identifiers.mjs';
-import { ProtocolError } from '../../protocol/src/errors.mjs';
+import { createTrustPolicy } from '@distribution-protocol/protocol';
+import { exportPublicKey, importPublicKey, keyFingerprint, documentIdOf } from '@distribution-protocol/protocol';
+import { isPublisherId, normalizeIdentifier } from '@distribution-protocol/protocol';
+import { ProtocolError } from '@distribution-protocol/protocol';
 
 /**
  * Where a consumer's trust state lives when not overridden.

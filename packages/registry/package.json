@@ -2,22 +2,46 @@
   "name": "@distribution-protocol/registry",
   "version": "1.0.0",
   "description": "Distribution Protocol registries: contract, memory, filesystem and HTTP implementations",
+  "keywords": [
+    "distribution-protocol",
+    "registry",
+    "software-distribution",
+    "supply-chain",
+    "http-server"
+  ],
+  "homepage": "https://github.com/rkendel1/distribution-protocol/tree/master/packages/registry#readme",
+  "bugs": {
+    "url": "https://github.com/rkendel1/distribution-protocol/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rkendel1/distribution-protocol.git",
+    "directory": "packages/registry"
+  },
+  "license": "MIT",
+  "author": "Distribution Protocol contributors",
   "type": "module",
   "main": "./src/index.mjs",
   "exports": {
-    ".": "./src/index.mjs"
+    ".": "./src/index.mjs",
+    "./package.json": "./package.json"
   },
+  "sideEffects": false,
   "files": [
-    "src"
+    "src",
+    "!src/**/*.test.mjs"
   ],
   "scripts": {
-    "test": "node --test ../conformance/src/conformance.test.mjs ../conformance/src/federation.test.mjs ../conformance/src/publisher-registry.test.mjs ../conformance/src/publisher-discovery.test.mjs ../conformance/src/trust-federation.test.mjs ../conformance/src/artifact-http.test.mjs ../conformance/src/registry-auth.test.mjs ../conformance/src/publisher-continuity.test.mjs"
+    "test": "node --test ../conformance/src/conformance.test.mjs ../conformance/src/federation.test.mjs ../conformance/src/publisher-registry.test.mjs ../conformance/src/publisher-discovery.test.mjs ../conformance/src/trust-federation.test.mjs ../conformance/src/artifact-http.test.mjs ../conformance/src/registry-auth.test.mjs ../conformance/src/publisher-continuity.test.mjs",
+    "prepublishOnly": "node ../../scripts/guard-publish.mjs"
   },
   "dependencies": {
-    "@distribution-protocol/protocol": "1.0.0"
+    "@distribution-protocol/protocol": "^1.0.0"
   },
-  "license": "MIT",
   "engines": {
     "node": ">=18.17"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

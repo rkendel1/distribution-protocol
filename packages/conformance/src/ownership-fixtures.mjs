@@ -14,7 +14,7 @@ import {
   rotatePublisherKey,
   signPublisherDocument,
   signRelease,
-} from '../../protocol/src/index.mjs';
+} from '@distribution-protocol/protocol';
 import { makeManifest } from './fixtures.mjs';
 
 /**
@@ -99,5 +99,5 @@ export function forgeSuccessor(victimHead, { keyId = 'evil-key', sequence } = {}
   return { envelope: signPublisherDocument(document, attacker.privateKey, { keyId }), attacker };
 }
 
-import { documentIdOf } from '../../protocol/src/index.mjs';
+import { documentIdOf } from '@distribution-protocol/protocol';
 const documentIdOfEnvelope = (envelope) => documentIdOf(envelope.document);

@@ -22,14 +22,14 @@ import {
   PublisherKeyError,
   PublisherConflictError,
   SignatureError,
-} from '../../protocol/src/errors.mjs';
-import { assertValidManifest, releaseIdOf } from '../../protocol/src/validate.mjs';
-import { verifyRelease, keyIdOf } from '../../protocol/src/signing.mjs';
-import { documentIdOf, verifyPublisherDocumentSignature } from '../../protocol/src/publisher.mjs';
-import { resolveFromReleases } from '../../protocol/src/resolve.mjs';
-import { productIdOf, parseProductId } from '../../protocol/src/identifiers.mjs';
-import { digestOfBytes, isDigest, validateArtifactMetadata } from '../../protocol/src/artifact.mjs';
-import { ProtocolError } from '../../protocol/src/errors.mjs';
+} from '@distribution-protocol/protocol';
+import { assertValidManifest, releaseIdOf } from '@distribution-protocol/protocol';
+import { verifyRelease, keyIdOf } from '@distribution-protocol/protocol';
+import { documentIdOf, verifyPublisherDocumentSignature } from '@distribution-protocol/protocol';
+import { resolveFromReleases } from '@distribution-protocol/protocol';
+import { productIdOf, parseProductId } from '@distribution-protocol/protocol';
+import { digestOfBytes, isDigest, validateArtifactMetadata } from '@distribution-protocol/protocol';
+import { ProtocolError } from '@distribution-protocol/protocol';
 import { orderReleases, isSameRelease } from './contract.mjs';
 import { consumeVerified, DEFAULT_MAX_ARTIFACT_BYTES } from './artifact-store.mjs';
 import { assertPublisherAdmission, assertReleaseAdmission, createMutex, instant } from './namespace-policy.mjs';

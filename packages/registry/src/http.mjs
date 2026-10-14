@@ -33,9 +33,9 @@ import { pipeline } from 'node:stream/promises';
 import { REGISTRY_STATUS, supportsArtifactContent } from './contract.mjs';
 import { DEFAULT_MAX_ARTIFACT_BYTES, artifactTooLarge } from './artifact-store.mjs';
 import { AuthError, forbidden, grantsNamespace } from './auth.mjs';
-import { ErrorCode, ProtocolError } from '../../protocol/src/errors.mjs';
-import { isDigest } from '../../protocol/src/artifact.mjs';
-import { parseProductId, parsePublisherId } from '../../protocol/src/identifiers.mjs';
+import { ErrorCode, ProtocolError } from '@distribution-protocol/protocol';
+import { isDigest } from '@distribution-protocol/protocol';
+import { parseProductId, parsePublisherId } from '@distribution-protocol/protocol';
 
 /**
  * Protocol error code -> HTTP status.
@@ -150,6 +150,15 @@ async function handleArtifactContent(registry, req, res, digest, { maxArtifactBy
   sendJson(res, 405, { code: ErrorCode.BAD_REQUEST, message: `${req.method} not allowed here` }, { allow: 'GET, HEAD, PUT' });
 }
 
+/** Decode one path segment; a malformed escape is the caller's error, not ours. */
+function decodeSegment(segment) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    throw new ProtocolError(ErrorCode.BAD_REQUEST, 'malformed percent-encoding in request path', {});
+  }
+}
+
 /** Read and parse a JSON request body, with a size limit. */
 async function readJsonBody(req, { limit = 8 * 1024 * 1024 } = {}) {
   const chunks = [];
@@ -230,7 +239,7 @@ export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX
 
       // --- /v1/artifacts/{digest} -----------------------------------------
       if (segments[0] === 'v1' && segments[1] === 'artifacts' && segments[2]) {
-        const digest = decodeURIComponent(segments[2]);
+        const digest = decodeSegment(segments[2]);
         if (!isDigest(digest)) {
           sendJson(res, 400, { code: ErrorCode.BAD_REQUEST, message: `malformed digest ${digest}` });
           return;
@@ -254,7 +263,7 @@ export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX
 
       // --- /v1/publishers/{publisher}[/documents] ---------------------------
       if (segments[0] === 'v1' && segments[1] === 'publishers' && segments[2]) {
-        const namespace = decodeURIComponent(segments[2]);
+        const namespace = decodeSegment(segments[2]);
         let publisher;
         try {
           publisher = parsePublisherId(`publisher://${namespace}`).namespace;
@@ -313,9 +322,9 @@ export function createRegistryHandler(registry, { maxArtifactBytes = DEFAULT_MAX
 
       // --- /v1/releases/... ------------------------------------------------
       if (segments[0] === 'v1' && segments[1] === 'releases' && segments[2]) {
-        const product = decodeURIComponent(segments[2]);
+        const product = decodeSegment(segments[2]);
         const pathProduct = parseProductId(`product://${product}`); // rejects malformed products
-        const version = segments[3] ? decodeURIComponent(segments[3]) : null;
+        const version = segments[3] ? decodeSegment(segments[3]) : null;
 
         // O5: nothing removes or edits a release. Only reads and publication exist.
         if (req.method !== 'PUT' && req.method !== 'GET' && req.method !== 'HEAD') {

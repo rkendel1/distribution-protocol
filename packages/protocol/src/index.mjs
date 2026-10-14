@@ -25,6 +25,7 @@ export {
   DigestMismatchError,
   ReceiptError,
   hasCode,
+  PublisherConflictError,
 } from './errors.mjs';
 
 // Identity
@@ -65,6 +66,7 @@ export {
   digestHex,
   verifyBytes,
   assertBytesMatchDigest,
+  validateArtifactMetadata,
 } from './artifact.mjs';
 
 // Manifest schema + validation

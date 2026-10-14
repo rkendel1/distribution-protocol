@@ -11,9 +11,9 @@
 
 import { createPublicKey } from 'node:crypto';
 
-import { ErrorCode, ProtocolError } from '../../protocol/src/errors.mjs';
-import { keyFingerprint, verifyPublisherSuccession } from '../../protocol/src/publisher.mjs';
-import { TrustOutcome, allowNewRelease } from '../../protocol/src/trust.mjs';
+import { ErrorCode, ProtocolError } from '@distribution-protocol/protocol';
+import { keyFingerprint, verifyPublisherSuccession } from '@distribution-protocol/protocol';
+import { TrustOutcome, allowNewRelease } from '@distribution-protocol/protocol';
 
 /** RFC 3339 UTC, whole seconds. */
 export const instant = (ms = Date.now()) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');

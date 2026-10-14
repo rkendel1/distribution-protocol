@@ -12,8 +12,8 @@
  *            whitespace handling in the test harness
  */
 
-import { canonicalBytes, canonicalize } from '../../protocol/src/canonical.mjs';
-import { digestOfBytes } from '../../protocol/src/artifact.mjs';
+import { canonicalBytes, canonicalize } from '@distribution-protocol/protocol';
+import { digestOfBytes } from '@distribution-protocol/protocol';
 import {
   documentIdOf,
   revokePublisherKey,
@@ -21,8 +21,8 @@ import {
   signPublisherDocument,
   signRelease,
   verifyPublisherAt,
-} from '../../protocol/src/index.mjs';
-import { createTrustPolicy } from '../../protocol/src/trust.mjs';
+} from '@distribution-protocol/protocol';
+import { createTrustPolicy } from '@distribution-protocol/protocol';
 import { PUBLISHER, makeManifest, makePublisherDocument, seededKeypair } from './fixtures.mjs';
 
 /** @type {Array<{name: string, rule: string, input: unknown, expected: string}>} */
